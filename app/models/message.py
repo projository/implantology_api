@@ -8,6 +8,7 @@ class Message(BaseModel):
     name: str
     email: str
     phone_number: str
+    subject: str
     message: str
     created_at: datetime
     updated_at: datetime
@@ -22,6 +23,7 @@ class MessageCreate(BaseModel):
     name: str
     email: str
     phone_number: str
+    subject: str
     message: str
 
 
@@ -29,4 +31,5 @@ class MessageUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     phone_number: Optional[str] = None
+    subject: Optional[str] = None
     message: Optional[str] = None

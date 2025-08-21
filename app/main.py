@@ -7,12 +7,11 @@ from starlette.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.utils.database import create_indexes
 from app.routes.attachment_routes import router as attachment_router
-from app.routes.carousel_routes import router as carousel_router
-from app.routes.offer_routes import router as offer_router
+from app.routes.constant_routes import router as constant_router
 from app.routes.message_routes import router as message_router
 from app.routes.testimonial_routes import router as testimonial_router
-from app.routes.constant_routes import router as constant_router
-from app.routes.quote_routes import router as quote_router
+from app.routes.carousel_routes import router as carousel_router
+from app.routes.doctor_routes import router as doctor_router
 
 # Load logging configuration
 with open("logging_config.yaml", "r") as f:
@@ -38,12 +37,11 @@ app.add_middleware(
 
 # Include routes
 app.include_router(attachment_router, prefix="/attachments", tags=["Attachment"])
-app.include_router(carousel_router, prefix="/carousels", tags=["Carousel"])
-app.include_router(offer_router, prefix="/offers", tags=["Offer"])
+app.include_router(constant_router, prefix="/constant", tags=["Constant"])
 app.include_router(message_router, prefix="/messages", tags=["Message"])
 app.include_router(testimonial_router, prefix="/testimonials", tags=["Testimonial"])
-app.include_router(constant_router, prefix="/constant", tags=["Constant"])
-app.include_router(quote_router, prefix="/quotes", tags=["Quote"])
+app.include_router(carousel_router, prefix="/carousels", tags=["Carousel"])
+app.include_router(doctor_router, prefix="/doctors", tags=["Doctor"])
 
 @app.get("/")
 def read_root():
