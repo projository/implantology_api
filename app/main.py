@@ -12,6 +12,7 @@ from app.routes.message_routes import router as message_router
 from app.routes.testimonial_routes import router as testimonial_router
 from app.routes.carousel_routes import router as carousel_router
 from app.routes.doctor_routes import router as doctor_router
+from app.routes.course_routes import router as course_router
 
 # Load logging configuration
 with open("logging_config.yaml", "r") as f:
@@ -42,6 +43,7 @@ app.include_router(message_router, prefix="/messages", tags=["Message"])
 app.include_router(testimonial_router, prefix="/testimonials", tags=["Testimonial"])
 app.include_router(carousel_router, prefix="/carousels", tags=["Carousel"])
 app.include_router(doctor_router, prefix="/doctors", tags=["Doctor"])
+app.include_router(course_router, prefix="/course", tags=["Course"])
 
 @app.get("/")
 def read_root():
