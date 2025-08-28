@@ -15,6 +15,9 @@ class Constant(BaseModel):
     phone_number: Optional[str] = None
     email: Optional[str] = None
     working_hours: Optional[str] = None
+    facebook_link: Optional[str] = None
+    instagram_link: Optional[str] = None
+    twitter_link: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -34,3 +37,6 @@ class ConstantSet(BaseModel):
     phone_number: Optional[str] = None
     email: Optional[str] = None
     working_hours: Optional[str] = None
+    facebook_link: Optional[str] = None
+    instagram_link: Optional[str] = None
+    twitter_link: Optional[str] = None
