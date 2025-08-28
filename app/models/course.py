@@ -25,6 +25,7 @@ class Course(BaseModel):
     duration: str
     price: Decimal
     instructor: str
+    instructor_image_key: str
     language: str
     lectures: int
     quizzes: int
@@ -50,6 +51,7 @@ class CourseCreate(BaseModel):
     duration: str
     price: Decimal
     instructor: str
+    instructor_image_key: str
     language: str
     lectures: int
     quizzes: int
@@ -65,6 +67,7 @@ class CourseUpdate(BaseModel):
     duration: Optional[str] = None
     price: Optional[Decimal] = None
     instructor: Optional[str] = None
+    instructor_image_key: Optional[str] = None
     language: Optional[str] = None
     lectures: Optional[int] = None
     quizzes: Optional[int] = None
