@@ -43,7 +43,7 @@ app.include_router(message_router, prefix="/messages", tags=["Message"])
 app.include_router(testimonial_router, prefix="/testimonials", tags=["Testimonial"])
 app.include_router(carousel_router, prefix="/carousels", tags=["Carousel"])
 app.include_router(doctor_router, prefix="/doctors", tags=["Doctor"])
-app.include_router(course_router, prefix="/course", tags=["Course"])
+app.include_router(course_router, prefix="/courses", tags=["Course"])
 
 @app.get("/")
 def read_root():

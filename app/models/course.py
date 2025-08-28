@@ -2,7 +2,6 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 from app.models.custom_types import PydanticObjectId
-from decimal import Decimal
 
 class Data(BaseModel):
     type: str
@@ -23,13 +22,13 @@ class Course(BaseModel):
     short_desc: str
     desc: List[Data]
     duration: str
-    price: Decimal
+    price: str
     instructor: str
     instructor_image_key: str
     language: str
     lectures: int
     quizzes: int
-    assessments: int
+    assessments: bool
     students: int
     created_at: datetime
     updated_at: datetime
@@ -37,10 +36,7 @@ class Course(BaseModel):
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
-        json_encoders = {
-            PydanticObjectId: str, 
-            Decimal: lambda v: str(v)
-        }
+        json_encoders = {PydanticObjectId: str}
 
 
 class CourseCreate(BaseModel):
@@ -49,13 +45,13 @@ class CourseCreate(BaseModel):
     short_desc: str
     desc: List[Data]
     duration: str
-    price: Decimal
+    price: str
     instructor: str
     instructor_image_key: str
     language: str
     lectures: int
     quizzes: int
-    assessments: int
+    assessments: bool
     students: int
 
 
@@ -65,11 +61,11 @@ class CourseUpdate(BaseModel):
     short_desc: Optional[str] = None
     desc: Optional[List[Data]] = None
     duration: Optional[str] = None
-    price: Optional[Decimal] = None
+    price: Optional[str] = None
     instructor: Optional[str] = None
     instructor_image_key: Optional[str] = None
     language: Optional[str] = None
     lectures: Optional[int] = None
     quizzes: Optional[int] = None
-    assessments: Optional[int] = None
+    assessments: Optional[bool] = None
     students: Optional[int] = None
