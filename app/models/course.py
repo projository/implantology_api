@@ -4,27 +4,20 @@ from datetime import datetime
 from app.models.custom_types import PydanticObjectId
 
 class Data(BaseModel):
-    type: str
+    data_type_id: str
     value: str
-
-    # heading
-    # sub_heading
-    # paragraph
-    # bullet
-    # image
-    # table
 
 
 class Course(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
+    category_id: str
     image_key: str
     name: str
     short_desc: str
     desc: List[Data]
     duration: str
     price: str
-    instructor: str
-    instructor_image_key: str
+    instructor_id: str
     language: str
     lectures: int
     quizzes: int
@@ -40,14 +33,14 @@ class Course(BaseModel):
 
 
 class CourseCreate(BaseModel):
+    category_id: str
     image_key: str
     name: str
     short_desc: str
     desc: List[Data]
     duration: str
     price: str
-    instructor: str
-    instructor_image_key: str
+    instructor_id: str
     language: str
     lectures: int
     quizzes: int
@@ -56,14 +49,14 @@ class CourseCreate(BaseModel):
 
 
 class CourseUpdate(BaseModel):
+    category_id: Optional[str] = None
     image_key: Optional[str] = None
     name: Optional[str] = None
     short_desc: Optional[str] = None
     desc: Optional[List[Data]] = None
     duration: Optional[str] = None
     price: Optional[str] = None
-    instructor: Optional[str] = None
-    instructor_image_key: Optional[str] = None
+    instructor_id: Optional[str] = None
     language: Optional[str] = None
     lectures: Optional[int] = None
     quizzes: Optional[int] = None
