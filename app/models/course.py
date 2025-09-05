@@ -1,7 +1,9 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
+from app.models.category import Category
 from app.models.custom_types import PydanticObjectId
+from app.models.instructor import Instructor
 
 class Data(BaseModel):
     data_type_id: str
@@ -11,6 +13,7 @@ class Data(BaseModel):
 class Course(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
     category_id: str
+    category: Optional[Category] = None
     image_key: str
     name: str
     short_desc: str
@@ -18,6 +21,7 @@ class Course(BaseModel):
     duration: str
     price: str
     instructor_id: str
+    instructor: Optional[Instructor] = None
     language: str
     lectures: int
     quizzes: int
