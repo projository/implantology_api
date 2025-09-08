@@ -25,9 +25,10 @@ async def list_all_galleries(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
+    is_patient: bool = Query(False),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    galleries = await list_galleries(db, page, per_page, keyword)
+    galleries = await list_galleries(db, page, per_page, keyword, is_patient)
     return galleries
 
 
@@ -35,9 +36,10 @@ async def list_all_galleries(
 @router.post("", response_model=List[Gallery], status_code=status.HTTP_201_CREATED)
 async def create_new_gallery(
     gallery_create: GalleryCreate,
+    is_patient: bool = Query(False),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
-    gallery = await create_gallery(db, gallery_create)
+    gallery = await create_gallery(db, gallery_create, is_patient)
     return gallery
 
 

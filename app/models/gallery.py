@@ -6,6 +6,7 @@ from app.models.custom_types import PydanticObjectId
 class Gallery(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
     image_key: str
+    type: str
     created_at: datetime
     updated_at: datetime
 
