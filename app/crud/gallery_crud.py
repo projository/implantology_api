@@ -1,4 +1,5 @@
 from typing import Dict, Any, List, Optional
+from fastapi import Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from datetime import datetime
@@ -14,44 +15,56 @@ async def list_galleries(
     db: AsyncIOMotorDatabase,
     page: int = 1,
     per_page: int = 10,
-    search_key: Optional[str] = None
+    search_key: Optional[str] = None,
+    is_patient: Optional[bool] = False,
 ) -> Dict[str, Any]:
     skip = (page - 1) * per_page
 
-    # Build the MongoDB query
-    query = {}
+    # Base query
+    query: Dict[str, Any] = {}
+
+    # Add search filter
     if search_key:
-        query = {
-            "$or": [
-                {"image_key": {"$regex": search_key, "$options": "i"}},  # Case-insensitive search in name
-                # Add more fields here if needed, e.g.:
-                # {"description": {"$regex": search_key, "$options": "i"}}
-            ]
-        }
+        query["$or"] = [
+            {"image_key": {"$regex": search_key, "$options": "i"}},
+            # Add more searchable fields if needed
+        ]
+
+    # Add patient/main filter
+    query["type"] = "patient" if is_patient else "main"
 
     # Fetch paginated galleries
-    galleries_cursor = db.galleries.find(query).sort("created_at", -1).skip(skip).limit(per_page)
+    galleries_cursor = (
+        db.galleries.find(query)
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(per_page)
+    )
     galleries = await galleries_cursor.to_list(length=per_page)
 
     # Convert ObjectId to str
     for gallery in galleries:
         gallery["_id"] = str(gallery["_id"])
 
-    # Fetch total number of galleries
+    # Count total
     total = await db.galleries.count_documents(query)
 
     return {
-        "data": [Gallery(**gallery).dict() for gallery in galleries],  # Or just return raw gallery dicts if no model
+        "data": [Gallery(**gallery).dict() for gallery in galleries],  # Or just galleries if no model
         "pagination": {
             "current_page": page,
             "per_page": per_page,
             "total": total,
-            "last_page": math.ceil(total / per_page) if per_page else 0
-        }
+            "last_page": math.ceil(total / per_page) if per_page else 0,
+        },
     }
 
 
-async def create_gallery(db: AsyncIOMotorDatabase, gallery_create: GalleryCreate) -> List[Gallery]:
+async def create_gallery(
+    db: AsyncIOMotorDatabase,
+    gallery_create: GalleryCreate,
+    is_patient: Optional[bool] = False,
+) -> List[Gallery]:
     galleries = []
 
     # 1. Get all image_keys from request
@@ -59,7 +72,10 @@ async def create_gallery(db: AsyncIOMotorDatabase, gallery_create: GalleryCreate
 
     # 2. Find existing keys in DB
     existing_docs = await db.galleries.find(
-        {"image_key": {"$in": image_keys}},
+        {
+            "image_key": {"$in": image_keys},
+            "type": "patient" if is_patient else "main"
+        },
         {"image_key": 1, "_id": 0}
     ).to_list(None)
     existing_keys = {doc["image_key"] for doc in existing_docs}
@@ -75,6 +91,7 @@ async def create_gallery(db: AsyncIOMotorDatabase, gallery_create: GalleryCreate
     gallery_docs = [
         {
             "image_key": key,
+            "type": "patient" if is_patient else "main",
             "created_at": now,
             "updated_at": now,
         }
