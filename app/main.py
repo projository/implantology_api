@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from starlette.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.utils.database import create_indexes
+from app.routes.auth_routes import router as auth_router
 from app.routes.attachment_routes import router as attachment_router
 from app.routes.constant_routes import router as constant_router
 from app.routes.message_routes import router as message_router
@@ -42,6 +43,7 @@ app.add_middleware(
 )
 
 # Include routes
+app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(attachment_router, prefix="/attachments", tags=["Attachment"])
 app.include_router(constant_router, prefix="/constant", tags=["Constant"])
 app.include_router(message_router, prefix="/messages", tags=["Message"])

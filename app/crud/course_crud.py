@@ -11,57 +11,6 @@ class CourseNotFound(Exception):
     pass
 
 
-async def get_course(db: AsyncIOMotorDatabase, course_id: str) -> Course:
-    pipeline = [
-        {"$match": {"_id": ObjectId(course_id)}},
-
-        # Convert string IDs to ObjectId for lookups
-        {"$addFields": {
-            "instructor_obj_id": {"$toObjectId": "$instructor_id"},
-            "category_obj_id": {"$toObjectId": "$category_id"}
-        }},
-
-        # Lookup instructor
-        {
-            "$lookup": {
-                "from": "instructors",
-                "localField": "instructor_obj_id",
-                "foreignField": "_id",
-                "as": "instructor"
-            }
-        },
-        {"$unwind": {"path": "$instructor", "preserveNullAndEmptyArrays": True}},
-
-        # Lookup category
-        {
-            "$lookup": {
-                "from": "categories",
-                "localField": "category_obj_id",
-                "foreignField": "_id",
-                "as": "category"
-            }
-        },
-        {"$unwind": {"path": "$category", "preserveNullAndEmptyArrays": True}},
-    ]
-
-    cursor = db.courses.aggregate(pipeline)
-    course_data = await cursor.to_list(length=1)
-
-    if not course_data:
-        raise CourseNotFound(f"Course with id {course_id} not found")
-
-    course = course_data[0]
-
-    # Convert ObjectIds to str
-    course["_id"] = str(course["_id"])
-    if "instructor" in course and course["instructor"]:
-        course["instructor"]["_id"] = str(course["instructor"]["_id"])
-    if "category" in course and course["category"]:
-        course["category"]["_id"] = str(course["category"]["_id"])
-
-    return Course(**course)
-
-
 async def list_courses(
     db: AsyncIOMotorDatabase,
     page: int = 1,
@@ -151,6 +100,57 @@ async def create_course(db: AsyncIOMotorDatabase, course_create: CourseCreate) -
     result = await db.courses.insert_one(course_data)
     course_data["_id"] = str(result.inserted_id)
     return Course(**course_data)
+
+
+async def get_course(db: AsyncIOMotorDatabase, course_id: str) -> Course:
+    pipeline = [
+        {"$match": {"_id": ObjectId(course_id)}},
+
+        # Convert string IDs to ObjectId for lookups
+        {"$addFields": {
+            "instructor_obj_id": {"$toObjectId": "$instructor_id"},
+            "category_obj_id": {"$toObjectId": "$category_id"}
+        }},
+
+        # Lookup instructor
+        {
+            "$lookup": {
+                "from": "instructors",
+                "localField": "instructor_obj_id",
+                "foreignField": "_id",
+                "as": "instructor"
+            }
+        },
+        {"$unwind": {"path": "$instructor", "preserveNullAndEmptyArrays": True}},
+
+        # Lookup category
+        {
+            "$lookup": {
+                "from": "categories",
+                "localField": "category_obj_id",
+                "foreignField": "_id",
+                "as": "category"
+            }
+        },
+        {"$unwind": {"path": "$category", "preserveNullAndEmptyArrays": True}},
+    ]
+
+    cursor = db.courses.aggregate(pipeline)
+    course_data = await cursor.to_list(length=1)
+
+    if not course_data:
+        raise CourseNotFound(f"Course with id {course_id} not found")
+
+    course = course_data[0]
+
+    # Convert ObjectIds to str
+    course["_id"] = str(course["_id"])
+    if "instructor" in course and course["instructor"]:
+        course["instructor"]["_id"] = str(course["instructor"]["_id"])
+    if "category" in course and course["category"]:
+        course["category"]["_id"] = str(course["category"]["_id"])
+
+    return Course(**course)
 
 
 async def update_course(
