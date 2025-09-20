@@ -26,19 +26,6 @@ async def get_db():
     return db
 
 
-@router.get("/users", response_model=PaginatedResponse[User])
-async def list_all_users(
-    role: str = Query(None),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(10, ge=1, le=100),
-    keyword: str = Query(None),
-    db: AsyncIOMotorDatabase = Depends(get_db),
-    user=Depends(admin_required)
-):
-    users = await list_users(db, role, page, per_page, keyword)
-    return users
-
-
 @router.post("/register", response_model=dict)
 async def register(
     user: UserCreate, 
@@ -98,6 +85,7 @@ async def get_current_profile(current_user: User = Depends(get_current_user)):
     current_user["_id"] = str(current_user["_id"])
     return User(**current_user)
 
+
 @router.put("/me", response_model=User)
 async def update_current_profile(
     user_update: UserUpdate, 
@@ -109,3 +97,36 @@ async def update_current_profile(
         return updated_user
     except UserNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    
+@router.get("/users", response_model=PaginatedResponse[User])
+async def list_all_users(
+    role: str = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    keyword: str = Query(None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+    user=Depends(admin_required)
+):
+    users = await list_users(db, role, page, per_page, keyword)
+    return users
+
+
+@router.get("/users/{user_id}", response_model=User)
+async def read_user(user_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    try:
+        user = await get_user(db, user_id)
+        return user
+    except UserNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_existing_user(
+    user_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    try:
+        await delete_user(db, user_id)
+    except UserNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return None
