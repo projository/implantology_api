@@ -7,12 +7,12 @@ from app.models.custom_types import PydanticObjectId
 class User(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
     role: str
-    image_key: str
+    image_key: Optional[str] = None
     full_name: str
     email: EmailStr
     phone_number: str
-    gender: str
-    age: str
+    gender: Optional[str] = None
+    age: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -24,21 +24,21 @@ class User(BaseModel):
 
 class UserCreate(BaseModel):
     role: str
-    image_key: Optional[str]
+    image_key: Optional[str] = None
     full_name: str
     email: EmailStr
     phone_number: str
     password: str
-    gender: Optional[str]
-    age: Optional[str]
+    gender: Optional[str] = None
+    age: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
-    role: Optional[str]
-    image_key: Optional[str]
-    full_name: Optional[str]
-    email: Optional[EmailStr]
-    phone_number: Optional[str]
-    password: Optional[str]
-    gender: Optional[str]
-    age: Optional[str]
+    role: Optional[str] = None
+    image_key: Optional[str] = None
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone_number: Optional[str] = None
+    password: Optional[str] = None
+    gender: Optional[str] = None
+    age: Optional[str] = None
