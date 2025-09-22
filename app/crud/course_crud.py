@@ -35,29 +35,24 @@ async def list_courses(
         {"$skip": skip},
         {"$limit": per_page},
 
-        # Convert string instructor_ids to ObjectIds
+        # Convert string IDs to ObjectId
         {"$addFields": {
-            "instructor_obj_ids": {
-                "$map": {
-                    "input": "$instructor_ids",
-                    "as": "id",
-                    "in": {"$toObjectId": "$$id"}
-                }
-            },
+            "instructor_obj_id": {"$toObjectId": "$instructor_id"},
             "category_obj_id": {"$toObjectId": "$category_id"}
         }},
 
-        # Lookup multiple instructors
+        # Lookup instructor
         {
             "$lookup": {
                 "from": "instructors",
-                "localField": "instructor_obj_ids",
+                "localField": "instructor_obj_id",
                 "foreignField": "_id",
-                "as": "instructors"
+                "as": "instructor"
             }
         },
+        {"$unwind": {"path": "$instructor", "preserveNullAndEmptyArrays": True}},
 
-        # Lookup single category
+        # Lookup category
         {
             "$lookup": {
                 "from": "categories",
@@ -77,10 +72,9 @@ async def list_courses(
     for course in courses:
         if "_id" in course:
             course["_id"] = str(course["_id"])
-        if "instructors" in course and isinstance(course["instructors"], list):
-            for inst in course["instructors"]:
-                if "_id" in inst:
-                    inst["_id"] = str(inst["_id"])
+        if "instructor" in course and course["instructor"]:
+            if "_id" in course["instructor"]:
+                course["instructor"]["_id"] = str(course["instructor"]["_id"])
         if "category" in course and course["category"]:
             if "_id" in course["category"]:
                 course["category"]["_id"] = str(course["category"]["_id"])
