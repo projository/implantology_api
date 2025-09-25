@@ -1,20 +1,24 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Annotated
+from typing import List, Optional, Annotated
 from datetime import datetime
-from decimal import Decimal
 from app.models.custom_types import PydanticObjectId
+from app.models.user import User
 
 
-RatingFloat = Annotated[float, Field(ge=1, le=5)]
+RatingInt = Annotated[int, Field(ge=1, le=5)]
 
 class Review(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
     type: str
     type_id: str
-    review_id: Optional[str] = None
-    user_id: str
-    rating: Optional[RatingFloat] = None
+    user: Optional[User] = None
+    rating: RatingInt
     message: str
+    like_id: Optional[List[str]] = []
+    dislike_id: Optional[List[str]] = []
+    replayer: Optional[User] = None
+    replay_message: Optional[str] = None
+    replay_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -27,16 +31,9 @@ class Review(BaseModel):
 class ReviewCreate(BaseModel):
     type: str
     type_id: str
-    review_id: Optional[str] = None
-    user_id: str
-    rating: Optional[RatingFloat] = None
+    rating: RatingInt
     message: str
+    
 
-
-class ReviewUpdate(BaseModel):
-    type: Optional[str] = None
-    type_id: Optional[str] = None
-    review_id: Optional[str] = None
-    user_id: Optional[str] = None
-    rating: Optional[RatingFloat] = None
-    message: Optional[str] = None
+class ReviewReplay(BaseModel):
+    replay_message: Optional[str] = None
