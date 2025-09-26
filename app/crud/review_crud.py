@@ -39,9 +39,11 @@ async def get_reviews(
                         "then": {"$toObjectId": "$replayer_id"},
                         "else": None
                     }
-                }
+                },
+                "type_obj_id": {"$toObjectId": "$type_id"}
             }
         },
+        # Lookup user
         {
             "$lookup": {
                 "from": "users",
@@ -51,6 +53,7 @@ async def get_reviews(
             }
         },
         {"$unwind": {"path": "$user", "preserveNullAndEmptyArrays": True}},
+        # Lookup replayer
         {
             "$lookup": {
                 "from": "users",
@@ -60,23 +63,88 @@ async def get_reviews(
             }
         },
         {"$unwind": {"path": "$replayer", "preserveNullAndEmptyArrays": True}},
+        # Lookup course
+        {
+            "$lookup": {
+                "from": "courses",
+                "localField": "type_obj_id",
+                "foreignField": "_id",
+                "as": "course"
+            }
+        },
+        {"$unwind": {"path": "$course", "preserveNullAndEmptyArrays": True}},
+        # Lookup blog
+        {
+            "$lookup": {
+                "from": "blogs",
+                "localField": "type_obj_id",
+                "foreignField": "_id",
+                "as": "blog"
+            }
+        },
+        {"$unwind": {"path": "$blog", "preserveNullAndEmptyArrays": True}},
+        # Project final response
+        {
+            "$project": {
+                "_id": 1,
+                "type": 1,
+                "type_id": 1,
+                "user": 1,
+                "replayer": 1,
+                "rating": 1,
+                "message": 1,
+                "like_id": 1,
+                "dislike_id": 1,
+                "replay_message": 1,
+                "replay_at": 1,
+                "created_at": 1,
+                "updated_at": 1,
+                "course": {
+                    "$cond": [
+                        {"$eq": ["$type", "COURSE"]},
+                        {
+                            "_id": "$course._id",
+                            "name": "$course.name",
+                            "short_desc": "$course.short_desc",
+                        },
+                        None,
+                    ]
+                },
+                "blog": {
+                    "$cond": [
+                        {"$eq": ["$type", "BLOG"]},
+                        {
+                            "_id": "$blog._id",
+                            "name": "$blog.name",
+                            "short_desc": "$blog.short_desc",
+                        },
+                        None,
+                    ]
+                },
+            }
+        }
     ]
 
     reviews_cursor = db.reviews.aggregate(pipeline)
     reviews = await reviews_cursor.to_list(length=per_page)
 
+    # Convert ObjectIds to string
     for review in reviews:
         if "_id" in review:
             review["_id"] = str(review["_id"])
-        if "user" in review and review["user"]:
+        if review.get("user") and "_id" in review["user"]:
             review["user"]["_id"] = str(review["user"]["_id"])
-        if "replayer" in review and review["replayer"]:
+        if review.get("replayer") and "_id" in review["replayer"]:
             review["replayer"]["_id"] = str(review["replayer"]["_id"])
+        if review.get("course") and "_id" in review["course"]:
+            review["course"]["_id"] = str(review["course"]["_id"])
+        if review.get("blog") and "_id" in review["blog"]:
+            review["blog"]["_id"] = str(review["blog"]["_id"])
 
     total = await db.reviews.count_documents(query)
 
     return {
-        "data": [Review(**review) for review in reviews],
+        "data": reviews,  # already shaped
         "pagination": {
             "current_page": page,
             "per_page": per_page,
@@ -84,7 +152,6 @@ async def get_reviews(
             "last_page": math.ceil(total / per_page) if per_page else 0,
         },
     }
-
 
 
 async def create_review(
@@ -120,17 +187,46 @@ async def create_review(
     else:
         review_data["user"] = None
 
+    # Step 5: fetch course/blog info based on type
+    if review_create.type == "COURSE":
+        course_doc = await db.courses.find_one({"_id": ObjectId(review_create.type_id)})
+        if course_doc:
+            review_data["course"] = {
+                "_id": str(course_doc["_id"]),
+                "name": course_doc.get("name"),
+                "short_desc": course_doc.get("short_desc"),
+            }
+        else:
+            review_data["course"] = None
+        review_data["blog"] = None
+
+    elif review_create.type == "BLOG":
+        blog_doc = await db.blogs.find_one({"_id": ObjectId(review_create.type_id)})
+        if blog_doc:
+            review_data["blog"] = {
+                "_id": str(blog_doc["_id"]),
+                "name": blog_doc.get("name"),
+                "short_desc": blog_doc.get("short_desc"),
+            }
+        else:
+            review_data["blog"] = None
+        review_data["course"] = None
+
+    else:
+        review_data["course"] = None
+        review_data["blog"] = None
+
     return Review(**review_data)
 
 
 async def get_review(
-    db: AsyncIOMotorDatabase, 
+    db: Any,  # AsyncIOMotorDatabase
     review_id: str,
 ) -> Review:
     pipeline = [
         {"$match": {"_id": ObjectId(review_id)}},
 
-        # Convert string ids into ObjectIds for lookup
+        # Prepare object ids
         {
             "$addFields": {
                 "user_obj_id": {"$toObjectId": "$user_id"},
@@ -140,7 +236,8 @@ async def get_review(
                         "then": {"$toObjectId": "$replayer_id"},
                         "else": None
                     }
-                }
+                },
+                "type_obj_id": {"$toObjectId": "$type_id"}
             }
         },
 
@@ -165,23 +262,90 @@ async def get_review(
             }
         },
         {"$unwind": {"path": "$replayer", "preserveNullAndEmptyArrays": True}},
+
+        # Lookup course
+        {
+            "$lookup": {
+                "from": "courses",
+                "localField": "type_obj_id",
+                "foreignField": "_id",
+                "as": "course"
+            }
+        },
+        {"$unwind": {"path": "$course", "preserveNullAndEmptyArrays": True}},
+
+        # Lookup blog
+        {
+            "$lookup": {
+                "from": "blogs",
+                "localField": "type_obj_id",
+                "foreignField": "_id",
+                "as": "blog"
+            }
+        },
+        {"$unwind": {"path": "$blog", "preserveNullAndEmptyArrays": True}},
+
+        # Final projection
+        {
+            "$project": {
+                "_id": 1,
+                "type": 1,
+                "type_id": 1,
+                "user": 1,
+                "replayer": 1,
+                "rating": 1,
+                "message": 1,
+                "like_id": 1,
+                "dislike_id": 1,
+                "replay_message": 1,
+                "replay_at": 1,
+                "created_at": 1,
+                "updated_at": 1,
+                "course": {
+                    "$cond": [
+                        {"$eq": ["$type", "COURSE"]},
+                        {
+                            "_id": "$course._id",
+                            "name": "$course.name",
+                            "short_desc": "$course.short_desc",
+                        },
+                        None,
+                    ]
+                },
+                "blog": {
+                    "$cond": [
+                        {"$eq": ["$type", "BLOG"]},
+                        {
+                            "_id": "$blog._id",
+                            "name": "$blog.name",
+                            "short_desc": "$blog.short_desc",
+                        },
+                        None,
+                    ]
+                },
+            }
+        }
     ]
 
     cursor = db.reviews.aggregate(pipeline)
     review_data = await cursor.to_list(length=1)
 
-    if not review_data:
+    if not review_data: 
         raise ReviewNotFound(f"Review with id {review_id} not found")
 
     review = review_data[0]
 
-    # Convert ObjectIds to strings
+    # Convert ObjectIds to string
     if "_id" in review:
         review["_id"] = str(review["_id"])
-    if "user" in review and review["user"]:
+    if review.get("user") and "_id" in review["user"]:
         review["user"]["_id"] = str(review["user"]["_id"])
-    if "replayer" in review and review["replayer"]:
+    if review.get("replayer") and "_id" in review["replayer"]:
         review["replayer"]["_id"] = str(review["replayer"]["_id"])
+    if review.get("course") and review["course"] and "_id" in review["course"]:
+        review["course"]["_id"] = str(review["course"]["_id"])
+    if review.get("blog") and review["blog"] and "_id" in review["blog"]:
+        review["blog"]["_id"] = str(review["blog"]["_id"])
 
     return Review(**review)
 
