@@ -105,7 +105,7 @@ async def list_all_users(
     per_page: int = Query(10, ge=1, le=100),
     keyword: str = Query(None),
     db: AsyncIOMotorDatabase = Depends(get_db),
-    user=Depends(admin_required)
+    admin=Depends(admin_required)
 ):
     users = await list_users(db, role, page, per_page, keyword)
     return users

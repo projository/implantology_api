@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Annotated
+from typing import Any, Dict, List, Optional, Annotated
 from datetime import datetime
 from app.models.custom_types import PydanticObjectId
 from app.models.user import User
@@ -11,6 +11,8 @@ class Review(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
     type: str
     type_id: str
+    course: Optional[Dict[str, Any]] = None
+    blog: Optional[Dict[str, Any]] = None
     user: Optional[User] = None
     rating: RatingInt
     message: str
