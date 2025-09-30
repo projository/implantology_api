@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     JWT_EXPIRY_IN_DAYS: int
     JWT_ALGORITHM: str
 
+    # RAZORPAY Settings
+    RAZORPAY_KEY_ID: str
+    RAZORPAY_KEY_SECRET: str
+
     class Config:
         env_file = ".env"
 
