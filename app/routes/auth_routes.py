@@ -31,18 +31,17 @@ async def register(
     user: UserCreate, 
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    existing_user_by_phone = await db.users.find_one({"phone_number": user.phone_number, "role": user.role})
-    if existing_user_by_phone:
+    existing_user = await db.users.find_one({
+        "role": user.role,
+        "$or": [
+            {"phone_number": user.phone_number},
+            {"email": user.email}
+        ]
+    })
+    if existing_user:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User with this phone number already exists",
-        )
-
-    existing_user_by_email = await db.users.find_one({"email": user.email, "role": user.role})
-    if existing_user_by_email:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User with this email already exists",
+            detail="User with this email or phone number already exists",
         )
     
     created_user = await create_user(db, user)
@@ -57,7 +56,7 @@ async def register(
 
 class LoginRequest(BaseModel):
     role: str
-    phone_number: str
+    identifier: str
     password: str
 
 @router.post("/login", response_model=dict)
@@ -65,7 +64,13 @@ async def login(
     body: LoginRequest, 
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    existing_user = await db.users.find_one({"role": body.role, "phone_number": body.phone_number})
+    existing_user = await db.users.find_one({
+        "role": body.role, 
+        "$or": [
+            {"phone_number": body.identifier},
+            {"email": body.identifier}
+        ]
+    })
     if not existing_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
@@ -77,7 +82,7 @@ async def login(
             detail="Invalid credentials"
         )
 
-    return {"token": generate_jwt(body.role, body.phone_number)}
+    return {"token": generate_jwt(body.role, body.identifier)}
 
 
 @router.get("/me", response_model=User)
@@ -97,6 +102,7 @@ async def update_current_profile(
         return updated_user
     except UserNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
     
 @router.get("/users", response_model=PaginatedResponse[User])
 async def list_all_users(
@@ -105,7 +111,7 @@ async def list_all_users(
     per_page: int = Query(10, ge=1, le=100),
     keyword: str = Query(None),
     db: AsyncIOMotorDatabase = Depends(get_db),
-    admin=Depends(admin_required)
+    _=Depends(admin_required)
 ):
     users = await list_users(db, role, page, per_page, keyword)
     return users
