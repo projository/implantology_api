@@ -15,10 +15,10 @@ JWT_SECRET = settings.JWT_SECRET
 JWT_ALGORITHM = settings.JWT_ALGORITHM
 
 
-def generate_jwt(role: str, phone_number: str) -> str:
+def generate_jwt(role: str, identifier: str) -> str:
     payload = { 
         "role": role,
-        "phone_number": phone_number,
+        "identifier": identifier,
         "exp": datetime.now() + timedelta(days=30)
     }
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -32,7 +32,7 @@ def decode_jwt(token: str):
             settings.JWT_SECRET, 
             algorithms=[settings.JWT_ALGORITHM]
         )
-        if payload.get("phone_number") is None:
+        if payload.get("identifier") is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
@@ -52,7 +52,13 @@ async def get_current_user(
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
     payload = decode_jwt(token)
-    user = await db.users.find_one({"role": payload.get("role"), "phone_number": payload.get("phone_number")})
+    user = await db.users.find_one({
+        "role": payload.get("role"),
+        "$or": [
+            {"phone_number": payload.get("identifier")},
+            {"email": payload.get("identifier")}
+        ]
+    })
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
