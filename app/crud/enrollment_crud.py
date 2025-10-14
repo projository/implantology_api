@@ -199,7 +199,7 @@ async def create_enrollment(
     enrollment_data["updated_at"] = datetime.now()
 
     # Fetch course details
-    course = await db.courses.find_one({"_id": enrollment_create.course_id})
+    course = await db.courses.find_one({"_id": ObjectId(enrollment_create.course_id)})
     if not course:
         raise ValueError("Course not found")
     
