@@ -18,8 +18,15 @@ class Course(BaseModel):
     name: str
     short_desc: str
     desc: List[Data]
-    duration: str
-    price: str
+    location: str
+    duration: Optional[str] = None
+    start_at: datetime
+    end_at: datetime
+    price: int
+    offer_start_at: Optional[datetime] = None
+    offer_end_at: Optional[datetime] = None
+    offer_price: Optional[int] = 0
+    instructor_ids: List[str]
     instructors: Optional[List[Instructor]] = []
     language: str
     lectures: int
@@ -41,8 +48,13 @@ class CourseCreate(BaseModel):
     name: str
     short_desc: str
     desc: List[Data]
-    duration: str
-    price: str
+    location: str
+    start_at: datetime
+    end_at: datetime
+    price: int
+    offer_start_at: datetime
+    offer_end_at: datetime
+    offer_price: int
     instructor_ids: List[str]
     language: str
     lectures: int
@@ -56,11 +68,15 @@ class CourseUpdate(BaseModel):
     name: Optional[str] = None
     short_desc: Optional[str] = None
     desc: Optional[List[Data]] = None
-    duration: Optional[str] = None
-    price: Optional[str] = None
+    location: Optional[str] = None
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    price: Optional[int] = 0
+    offer_start_at: Optional[datetime] = None
+    offer_end_at: Optional[datetime] = None
+    offer_price: Optional[int] = 0
     instructor_ids: Optional[List[str]] = None
     language: Optional[str] = None
     lectures: Optional[int] = None
     quizzes: Optional[int] = None
     assessments: Optional[bool] = None
-    students: Optional[int] = None

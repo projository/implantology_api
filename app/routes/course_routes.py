@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from app.models.course import Course, CourseCreate, CourseUpdate
 from app.crud.course_crud import (
-    get_course,
-    list_courses,
+    get_courses,
     create_course,
+    get_course,
     update_course,
     delete_course,
     CourseNotFound,
@@ -14,12 +14,31 @@ from app.models.pagination import PaginatedResponse
 
 router = APIRouter()
 
-# Dependency to get the database
 async def get_db():
     db = await get_database()
     return db
     
-# Read course by ID
+
+@router.get("", response_model=PaginatedResponse[Course])
+async def list_courses(
+    keyword: str = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    courses = await get_courses(db, page, per_page, keyword)
+    return courses
+
+
+@router.post("", response_model=Course, status_code=status.HTTP_201_CREATED)
+async def add_course(
+    course_create: CourseCreate,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    course = await create_course(db, course_create)
+    return course
+
+
 @router.get("/{course_id}", response_model=Course)
 async def read_course(course_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
     try:
@@ -29,31 +48,8 @@ async def read_course(course_id: str, db: AsyncIOMotorDatabase = Depends(get_db)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-# List all course
-@router.get("", response_model=PaginatedResponse[Course])
-async def list_all_courses(
-    keyword: str = Query(None),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(10, ge=1, le=100),
-    db: AsyncIOMotorDatabase = Depends(get_db)
-):
-    courses = await list_courses(db, page, per_page, keyword)
-    return courses
-
-
-# Create a new course
-@router.post("", response_model=Course, status_code=status.HTTP_201_CREATED)
-async def create_new_course(
-    course_create: CourseCreate,
-    db: AsyncIOMotorDatabase = Depends(get_db),
-):
-    course = await create_course(db, course_create)
-    return course
-
-
-# Update an existing course
 @router.put("/{course_id}", response_model=Course)
-async def update_existing_course(
+async def modify_course(
     course_id: str,
     course_update: CourseUpdate,
     db: AsyncIOMotorDatabase = Depends(get_db),
@@ -65,9 +61,8 @@ async def update_existing_course(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-# Delete a course
 @router.delete("/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_existing_course(
+async def remove_course(
     course_id: str,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
