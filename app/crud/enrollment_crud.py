@@ -139,6 +139,7 @@ async def get_enrollments(
                         {"$ifNull": ["$course._id", False]},
                         {
                             "_id": "$course._id",
+                            "image_key": "$course.image_key",
                             "name": "$course.name",
                             "short_desc": "$course.short_desc",
                             "location": "$course.location",
@@ -260,6 +261,7 @@ async def get_enrollment(
                         {"$ifNull": ["$course._id", False]},
                         {
                             "_id": "$course._id",
+                            "image_key": "$course.image_key",
                             "name": "$course.name",
                             "short_desc": "$course.short_desc",
                             "location": "$course.location",
