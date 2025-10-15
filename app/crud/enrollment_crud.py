@@ -141,6 +141,7 @@ async def get_enrollments(
                             "_id": "$course._id",
                             "name": "$course.name",
                             "short_desc": "$course.short_desc",
+                            "location": "$course.location",
                         },
                         None,
                     ]
@@ -261,6 +262,7 @@ async def get_enrollment(
                             "_id": "$course._id",
                             "name": "$course.name",
                             "short_desc": "$course.short_desc",
+                            "location": "$course.location",
                         },
                         None,
                     ]
