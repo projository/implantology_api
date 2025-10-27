@@ -80,7 +80,11 @@ async def get_user(db: AsyncIOMotorDatabase, user_id: str) -> User:
 
 async def update_user(db: AsyncIOMotorDatabase, user_id: str, user_update: UserUpdate) -> User:
     update_data = {k: v for k, v in user_update.dict().items() if v is not None}
-    update_data["password"] = hash_password(update_data["password"])
+
+    # Only hash the password if it exists in the update data
+    if "password" in update_data:
+        update_data["password"] = hash_password(update_data["password"])
+    
     update_data["updated_at"] = datetime.now()
     result = await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update_data})
     if result.modified_count == 1:
