@@ -34,7 +34,7 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    role: Optional[str] = None
+    role: str
     image_key: Optional[str] = None
     full_name: Optional[str] = None
     email: Optional[EmailStr] = None

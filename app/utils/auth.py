@@ -6,6 +6,7 @@ from app.utils.database import get_database
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from datetime import datetime, timedelta
 import bcrypt
+import re
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -52,26 +53,41 @@ async def get_current_user(
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
     payload = decode_jwt(token)
+
+    # Normalize role
+    normalized_role = payload.get("role").strip().upper()
+
+    # Default safe version (for email or other identifiers)
+    safe_identifier = re.escape(payload.get("identifier").strip())
+
+    # Normalize phone numbers (handles +91, 0091, 91 prefixes, etc.)
+    if re.fullmatch(r"\+?\d+", payload.get("identifier").strip()):  # numeric with optional '+'
+        digits = re.sub(r"\D", "", payload.get("identifier"))[-10:]  # keep only last 10 digits
+        safe_identifier = f"+91{digits}"
+
+    # Find user by phone or email
     user = await db.users.find_one({
-        "role": payload.get("role"),
+        "role": normalized_role,
         "$or": [
-            {"phone_number": payload.get("identifier")},
-            {"email": payload.get("identifier")}
+            {"phone_number": {"$regex": f"{re.escape(safe_identifier)}$"}},
+            {"email": {"$regex": f"^{re.escape(payload.get("identifier").strip())}$", "$options": "i"}}
         ]
     })
+
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
     return user
 
 
 async def admin_required(
     user=Depends(get_current_user)
 ):
-    if user["role"] != "ADMIN":
+    if user["role"].strip().upper() != "ADMIN":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to perform this action",
