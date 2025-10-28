@@ -17,6 +17,7 @@ from app.crud.user_crud import (
 )
 from app.utils.database import get_database
 from app.utils.auth import admin_required, generate_jwt, get_current_user, verify_password
+import re
 
 router = APIRouter()
 
@@ -31,13 +32,26 @@ async def register(
     user: UserCreate, 
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
+    # Normalize role
+    normalized_role = user.role.strip().upper()
+
+    # Default safe version (for email or other identifiers)
+    safe_identifier = re.escape(user.phone_number.strip())
+
+    # Normalize phone numbers (handles +91, 0091, 91 prefixes, etc.)
+    if re.fullmatch(r"\+?\d+", user.phone_number.strip()):  # numeric with optional '+'
+        digits = re.sub(r"\D", "", user.phone_number)[-10:]  # keep only last 10 digits
+        safe_identifier = f"+91{digits}"
+
+    # Find user by phone or email
     existing_user = await db.users.find_one({
-        "role": user.role,
+        "role": normalized_role,
         "$or": [
-            {"phone_number": user.phone_number},
-            {"email": user.email}
+            {"phone_number": {"$regex": f"{re.escape(safe_identifier)}$"}},
+            {"email": {"$regex": f"^{re.escape(user.email.strip())}$", "$options": "i"}}
         ]
-    })
+    })    
+
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -64,13 +78,26 @@ async def login(
     body: LoginRequest, 
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
+    # Normalize role
+    normalized_role = body.role.strip().upper()
+
+    # Default safe version (for email or other identifiers)
+    safe_identifier = re.escape(body.identifier.strip())
+
+    # Normalize phone numbers (handles +91, 0091, 91 prefixes, etc.)
+    if re.fullmatch(r"\+?\d+", body.identifier.strip()):  # numeric with optional '+'
+        digits = re.sub(r"\D", "", body.identifier)[-10:]  # keep only last 10 digits
+        safe_identifier = f"+91{digits}"
+
+    # Find user by phone or email
     existing_user = await db.users.find_one({
-        "role": body.role, 
+        "role": normalized_role,
         "$or": [
-            {"phone_number": body.identifier},
-            {"email": body.identifier}
+            {"phone_number": {"$regex": f"{re.escape(safe_identifier)}$"}},
+            {"email": {"$regex": f"^{re.escape(body.identifier.strip())}$", "$options": "i"}}
         ]
     })
+
     if not existing_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
@@ -85,14 +112,46 @@ async def login(
     return {"token": generate_jwt(body.role, body.identifier)}
 
 
+@router.get("/identify", response_model=dict)
+async def identify(
+    role: str,
+    identifier: str,
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    # Normalize role
+    normalized_role = role.strip().upper()
+
+    # Default safe version (for email or other identifiers)
+    safe_identifier = re.escape(identifier.strip())
+
+    # Normalize phone numbers (handles +91, 0091, 91 prefixes, etc.)
+    if re.fullmatch(r"\+?\d+", identifier.strip()):  # numeric with optional '+'
+        digits = re.sub(r"\D", "", identifier)[-10:]  # keep only last 10 digits
+        safe_identifier = f"+91{digits}"
+
+    # Find user by phone or email
+    user = await db.users.find_one({
+        "role": normalized_role,
+        "$or": [
+            {"phone_number": {"$regex": f"{re.escape(safe_identifier)}$"}},
+            {"email": {"$regex": f"^{re.escape(identifier.strip())}$", "$options": "i"}}
+        ]
+    })
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"token": generate_jwt(role, identifier)}
+
+
 @router.get("/me", response_model=User)
-async def get_current_profile(current_user: User = Depends(get_current_user)):
+async def get_profile(current_user: User = Depends(get_current_user)):
     current_user["_id"] = str(current_user["_id"])
     return User(**current_user)
 
 
 @router.put("/me", response_model=User)
-async def update_current_profile(
+async def update_profile(
     user_update: UserUpdate, 
     db: AsyncIOMotorDatabase = Depends(get_db), 
     current_user: User = Depends(get_current_user)
