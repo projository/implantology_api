@@ -52,9 +52,9 @@ class CourseCreate(BaseModel):
     start_at: datetime
     end_at: datetime
     price: int
-    offer_start_at: datetime
-    offer_end_at: datetime
-    offer_price: int
+    offer_start_at: Optional[datetime] = None
+    offer_end_at: Optional[datetime] = None
+    offer_price: Optional[int] = 0
     instructor_ids: List[str]
     language: str
     lectures: int
