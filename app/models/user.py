@@ -10,7 +10,6 @@ class User(BaseModel):
     image_key: Optional[str] = None
     first_name: str
     last_name: str
-    city: str
     email: EmailStr
     phone_number: str
     gender: Optional[str] = None
@@ -29,7 +28,6 @@ class UserCreate(BaseModel):
     image_key: Optional[str] = None
     first_name: str
     last_name: str
-    city: str
     email: EmailStr
     phone_number: str
     password: str
@@ -42,7 +40,6 @@ class UserUpdate(BaseModel):
     image_key: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    city: Optional[str] = None
     email: Optional[EmailStr] = None
     phone_number: Optional[str] = None
     password: Optional[str] = None
