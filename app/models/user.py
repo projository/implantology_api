@@ -8,7 +8,9 @@ class User(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
     role: str
     image_key: Optional[str] = None
-    full_name: str
+    first_name: str
+    last_name: str
+    city: str
     email: EmailStr
     phone_number: str
     gender: Optional[str] = None
@@ -25,7 +27,9 @@ class User(BaseModel):
 class UserCreate(BaseModel):
     role: str
     image_key: Optional[str] = None
-    full_name: str
+    first_name: str
+    last_name: str
+    city: str
     email: EmailStr
     phone_number: str
     password: str
@@ -36,7 +40,9 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     role: str
     image_key: Optional[str] = None
-    full_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    city: Optional[str] = None
     email: Optional[EmailStr] = None
     phone_number: Optional[str] = None
     password: Optional[str] = None
