@@ -5,6 +5,7 @@ from app.models.custom_types import PydanticObjectId
 
 class Category(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
+    type: str
     name: str
     created_at: datetime
     updated_at: datetime
@@ -16,8 +17,10 @@ class Category(BaseModel):
 
 
 class CategoryCreate(BaseModel):
+    type: str
     name: str
 
 
 class CategoryUpdate(BaseModel):
+    type: Optional[str] = None
     name: Optional[str] = None
