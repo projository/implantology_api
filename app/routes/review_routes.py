@@ -4,12 +4,12 @@ from fastapi.security import OAuth2PasswordBearer
 from app.models.review import Review, ReviewCreate, ReviewReplay
 from app.crud.review_crud import (
     get_reviews,
-    get_summary,
     create_review,
     get_review,
-    replay_review,
-    react_review,
     delete_review,
+    get_summary,
+    react_review,
+    replay_review,
     ReviewNotFound,
 )
 from app.models.user import User
@@ -70,19 +70,6 @@ async def list_reviews(
     return reviews
 
 
-@router.get("/summary", response_model=dict)
-async def retrive_summary(
-    type: str,
-    type_id: str,
-    db: AsyncIOMotorDatabase = Depends(get_db)
-):
-    try:
-        response = await get_summary(db, type, type_id)
-        return response
-    except ReviewNotFound as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-
 @router.post("", response_model=Review, status_code=status.HTTP_201_CREATED)
 async def add_review(
     review_create: ReviewCreate,
@@ -101,6 +88,32 @@ async def read_review(
     try:
         review = await get_review(db, review_id)
         return review
+    except ReviewNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.delete("/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_review(
+    review_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+    _: User = Depends(get_current_user)
+):
+    try:
+        await delete_review(db, review_id)
+    except ReviewNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return None
+
+
+@router.get("/summary", response_model=dict)
+async def retrive_summary(
+    type: str,
+    type_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    try:
+        response = await get_summary(db, type, type_id)
+        return response
     except ReviewNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -132,16 +145,3 @@ async def react_to_review(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ReviewNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    
-
-@router.delete("/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_review(
-    review_id: str,
-    db: AsyncIOMotorDatabase = Depends(get_db),
-    _: User = Depends(get_current_user)
-):
-    try:
-        await delete_review(db, review_id)
-    except ReviewNotFound as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    return None

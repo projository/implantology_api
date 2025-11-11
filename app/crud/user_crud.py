@@ -13,7 +13,7 @@ class UserNotFound(Exception):
     pass
 
 
-async def list_users(
+async def get_users(
     db: AsyncIOMotorDatabase,
     role: str,
     page: int = 1,

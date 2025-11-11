@@ -11,15 +11,7 @@ class MessageNotFound(Exception):
     pass
 
 
-async def get_message(db: AsyncIOMotorDatabase, message_id: str) -> Message:
-    message_data = await db.messages.find_one({"_id": ObjectId(message_id)})
-    if message_data:
-        message_data["_id"] = str(message_data["_id"])
-        return Message(**message_data)
-    raise MessageNotFound(f"Message with id {message_id} not found")
-
-
-async def list_messages(
+async def get_messages(
     db: AsyncIOMotorDatabase,
     page: int = 1,
     per_page: int = 10,
@@ -58,7 +50,7 @@ async def list_messages(
             "last_page": math.ceil(total / per_page) if per_page else 0
         }
     }
-# async def list_messages(
+# async def get_messages(
 #     db: AsyncIOMotorDatabase,
 #     last_created_at: Optional[str] = None,
 #     per_page: int = 10
@@ -92,6 +84,14 @@ async def create_message(db: AsyncIOMotorDatabase, message_create: MessageCreate
     result = await db.messages.insert_one(message_data)
     message_data["_id"] = str(result.inserted_id)
     return Message(**message_data)
+
+
+async def get_message(db: AsyncIOMotorDatabase, message_id: str) -> Message:
+    message_data = await db.messages.find_one({"_id": ObjectId(message_id)})
+    if message_data:
+        message_data["_id"] = str(message_data["_id"])
+        return Message(**message_data)
+    raise MessageNotFound(f"Message with id {message_id} not found")
 
 
 async def update_message(db: AsyncIOMotorDatabase, message_id: str, message_update: MessageUpdate) -> Message:

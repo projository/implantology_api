@@ -350,68 +350,6 @@ async def get_review(
     return Review(**review)
 
 
-async def replay_review(
-    db: AsyncIOMotorDatabase, 
-    review_id: str, 
-    replayer_id: str, 
-    review_replay: ReviewReplay,
-) -> Review:
-    update_data = {k: v for k, v in review_replay.dict().items() if v is not None}
-    update_data["replayer_id"] = replayer_id
-    update_data["replay_at"] = datetime.now()
-    result = await db.reviews.update_one({"_id": ObjectId(review_id)}, {"$set": update_data})
-    if result.modified_count == 1:
-        return await get_review(db, review_id)
-    raise ReviewNotFound(f"Review with id {review_id} not found")
-
-
-async def react_review(
-    db: AsyncIOMotorDatabase,
-    review_id: str,
-    reactor_id: str,
-    react_as: str,
-) -> Review:
-    if react_as not in ["like", "dislike"]:
-        raise ValueError("Invalid react_as. Must be 'like' or 'dislike'.")
-
-    review = await db.reviews.find_one({"_id": ObjectId(review_id)})
-    if not review:
-        raise ReviewNotFound(f"Review with id {review_id} not found")
-
-    like_ids = review.get("like_id", [])
-    dislike_ids = review.get("dislike_id", [])
-
-    update_query = {}
-
-    if react_as == "like":
-        if reactor_id in like_ids:
-            # Already liked → remove it
-            update_query["$pull"] = {"like_id": reactor_id}
-        else:
-            # Add like → also remove from dislike if present
-            update_query["$addToSet"] = {"like_id": reactor_id}
-            update_query.setdefault("$pull", {})["dislike_id"] = reactor_id
-
-    elif react_as == "dislike":
-        if reactor_id in dislike_ids:
-            # Already disliked → remove it
-            update_query["$pull"] = {"dislike_id": reactor_id}
-        else:
-            # Add dislike → also remove from like if present
-            update_query["$addToSet"] = {"dislike_id": reactor_id}
-            update_query.setdefault("$pull", {})["like_id"] = reactor_id
-
-    result = await db.reviews.update_one(
-        {"_id": ObjectId(review_id)},
-        update_query
-    )
-
-    if result.modified_count == 1:
-        return await get_review(db, review_id)
-
-    return Review(**review)
-
-
 async def delete_review(
     db: AsyncIOMotorDatabase, 
     review_id: str,
@@ -497,5 +435,67 @@ async def get_summary(
         raise ReviewNotFound(f"No reviews found for type={type}, type_id={type_id}")
 
     return result[0]
+
+
+async def replay_review(
+    db: AsyncIOMotorDatabase, 
+    review_id: str, 
+    replayer_id: str, 
+    review_replay: ReviewReplay,
+) -> Review:
+    update_data = {k: v for k, v in review_replay.dict().items() if v is not None}
+    update_data["replayer_id"] = replayer_id
+    update_data["replay_at"] = datetime.now()
+    result = await db.reviews.update_one({"_id": ObjectId(review_id)}, {"$set": update_data})
+    if result.modified_count == 1:
+        return await get_review(db, review_id)
+    raise ReviewNotFound(f"Review with id {review_id} not found")
+
+
+async def react_review(
+    db: AsyncIOMotorDatabase,
+    review_id: str,
+    reactor_id: str,
+    react_as: str,
+) -> Review:
+    if react_as not in ["like", "dislike"]:
+        raise ValueError("Invalid react_as. Must be 'like' or 'dislike'.")
+
+    review = await db.reviews.find_one({"_id": ObjectId(review_id)})
+    if not review:
+        raise ReviewNotFound(f"Review with id {review_id} not found")
+
+    like_ids = review.get("like_id", [])
+    dislike_ids = review.get("dislike_id", [])
+
+    update_query = {}
+
+    if react_as == "like":
+        if reactor_id in like_ids:
+            # Already liked → remove it
+            update_query["$pull"] = {"like_id": reactor_id}
+        else:
+            # Add like → also remove from dislike if present
+            update_query["$addToSet"] = {"like_id": reactor_id}
+            update_query.setdefault("$pull", {})["dislike_id"] = reactor_id
+
+    elif react_as == "dislike":
+        if reactor_id in dislike_ids:
+            # Already disliked → remove it
+            update_query["$pull"] = {"dislike_id": reactor_id}
+        else:
+            # Add dislike → also remove from like if present
+            update_query["$addToSet"] = {"dislike_id": reactor_id}
+            update_query.setdefault("$pull", {})["like_id"] = reactor_id
+
+    result = await db.reviews.update_one(
+        {"_id": ObjectId(review_id)},
+        update_query
+    )
+
+    if result.modified_count == 1:
+        return await get_review(db, review_id)
+
+    return Review(**review)
 
 

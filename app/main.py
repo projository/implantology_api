@@ -22,6 +22,7 @@ from app.routes.blog_routes import router as blog_router
 from app.routes.review_routes import router as review_router
 from app.routes.payment_routes import router as payment_router
 from app.routes.enrollment_routes import router as enrollment_router
+from app.routes.faq_routes import router as faq_router
 
 # Load logging configuration
 with open("logging_config.yaml", "r") as f:
@@ -63,6 +64,7 @@ app.include_router(blog_router, prefix="/blogs", tags=["Blog"])
 app.include_router(review_router, prefix="/reviews", tags=["Review"])
 app.include_router(payment_router, prefix="/payments", tags=["Payment"])
 app.include_router(enrollment_router, prefix="/enrollments", tags=["Enrollment"])
+app.include_router(faq_router, prefix="/faqs", tags=["FAQ"])
 
 @app.get("/")
 def read_root():

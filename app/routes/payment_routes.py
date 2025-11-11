@@ -1,4 +1,4 @@
-import razorpay
+import razorpay # type: ignore
 from fastapi import APIRouter, Request
 from app.core.config import settings
 

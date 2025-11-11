@@ -10,15 +10,7 @@ class DoctorNotFound(Exception):
     pass
 
 
-async def get_doctor(db: AsyncIOMotorDatabase, doctor_id: str) -> Doctor:
-    doctor_data = await db.doctors.find_one({"_id": ObjectId(doctor_id)})
-    if doctor_data:
-        doctor_data["_id"] = str(doctor_data["_id"])
-        return Doctor(**doctor_data)
-    raise DoctorNotFound(f"Doctor with id {doctor_id} not found")
-
-
-async def list_doctors(
+async def get_doctors(
     db: AsyncIOMotorDatabase,
     page: int = 1,
     per_page: int = 10,
@@ -57,7 +49,7 @@ async def list_doctors(
             "last_page": math.ceil(total / per_page) if per_page else 0
         }
     }
-# async def list_doctors(
+# async def get_doctors(
 #     db: AsyncIOMotorDatabase,
 #     page: int = 1,
 #     per_page: int = 10,
@@ -105,6 +97,14 @@ async def create_doctor(db: AsyncIOMotorDatabase, doctor_create: DoctorCreate) -
     result = await db.doctors.insert_one(doctor_data)
     doctor_data["_id"] = str(result.inserted_id)
     return Doctor(**doctor_data)
+
+
+async def get_doctor(db: AsyncIOMotorDatabase, doctor_id: str) -> Doctor:
+    doctor_data = await db.doctors.find_one({"_id": ObjectId(doctor_id)})
+    if doctor_data:
+        doctor_data["_id"] = str(doctor_data["_id"])
+        return Doctor(**doctor_data)
+    raise DoctorNotFound(f"Doctor with id {doctor_id} not found")
 
 
 async def update_doctor(db: AsyncIOMotorDatabase, doctor_id: str, doctor_update: DoctorUpdate) -> Doctor:

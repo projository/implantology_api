@@ -11,15 +11,7 @@ class TestimonialNotFound(Exception):
     pass
 
 
-async def get_testimonial(db: AsyncIOMotorDatabase, testimonial_id: str) -> Testimonial:
-    testimonial_data = await db.testimonials.find_one({"_id": ObjectId(testimonial_id)})
-    if testimonial_data:
-        testimonial_data["_id"] = str(testimonial_data["_id"])
-        return Testimonial(**testimonial_data)
-    raise TestimonialNotFound(f"Testimonial with id {testimonial_id} not found")
-
-
-async def list_testimonials(
+async def get_testimonials(
     db: AsyncIOMotorDatabase,
     page: int = 1,
     per_page: int = 10,
@@ -59,6 +51,7 @@ async def list_testimonials(
         }
     }
 
+
 async def create_testimonial(db: AsyncIOMotorDatabase, testimonial_create: TestimonialCreate) -> Testimonial:
     testimonial_data = testimonial_create.dict()
     testimonial_data["created_at"] = datetime.now()
@@ -66,6 +59,14 @@ async def create_testimonial(db: AsyncIOMotorDatabase, testimonial_create: Testi
     result = await db.testimonials.insert_one(testimonial_data)
     testimonial_data["_id"] = str(result.inserted_id)
     return Testimonial(**testimonial_data)
+
+
+async def get_testimonial(db: AsyncIOMotorDatabase, testimonial_id: str) -> Testimonial:
+    testimonial_data = await db.testimonials.find_one({"_id": ObjectId(testimonial_id)})
+    if testimonial_data:
+        testimonial_data["_id"] = str(testimonial_data["_id"])
+        return Testimonial(**testimonial_data)
+    raise TestimonialNotFound(f"Testimonial with id {testimonial_id} not found")
 
 
 async def update_testimonial(db: AsyncIOMotorDatabase, testimonial_id: str, testimonial_update: TestimonialUpdate) -> Testimonial:
