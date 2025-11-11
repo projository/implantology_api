@@ -11,58 +11,7 @@ class BlogNotFound(Exception):
     pass
 
 
-async def get_blog(db: AsyncIOMotorDatabase, blog_id: str) -> Blog:
-    pipeline = [
-        {"$match": {"_id": ObjectId(blog_id)}},
-
-        # Convert string IDs to ObjectId for lookups
-        {"$addFields": {
-            "doctor_obj_id": {"$toObjectId": "$doctor_id"},
-            "category_obj_id": {"$toObjectId": "$category_id"}
-        }},
-
-        # Lookup doctor
-        {
-            "$lookup": {
-                "from": "doctors",
-                "localField": "doctor_obj_id",
-                "foreignField": "_id",
-                "as": "doctor"
-            }
-        },
-        {"$unwind": {"path": "$doctor", "preserveNullAndEmptyArrays": True}},
-
-        # Lookup category
-        {
-            "$lookup": {
-                "from": "categories",
-                "localField": "category_obj_id",
-                "foreignField": "_id",
-                "as": "category"
-            }
-        },
-        {"$unwind": {"path": "$category", "preserveNullAndEmptyArrays": True}},
-    ]
-
-    cursor = db.blogs.aggregate(pipeline)
-    blog_data = await cursor.to_list(length=1)
-
-    if not blog_data:
-        raise BlogNotFound(f"Blog with id {blog_id} not found")
-
-    blog = blog_data[0]
-
-    # Convert ObjectIds to str
-    blog["_id"] = str(blog["_id"])
-    if "doctor" in blog and blog["doctor"]:
-        blog["doctor"]["_id"] = str(blog["doctor"]["_id"])
-    if "category" in blog and blog["category"]:
-        blog["category"]["_id"] = str(blog["category"]["_id"])
-
-    return Blog(**blog)
-
-
-async def list_blogs(
+async def get_blogs(
     db: AsyncIOMotorDatabase,
     page: int = 1,
     per_page: int = 10,
@@ -151,6 +100,57 @@ async def create_blog(db: AsyncIOMotorDatabase, blog_create: BlogCreate) -> Blog
     result = await db.blogs.insert_one(blog_data)
     blog_data["_id"] = str(result.inserted_id)
     return Blog(**blog_data)
+
+
+async def get_blog(db: AsyncIOMotorDatabase, blog_id: str) -> Blog:
+    pipeline = [
+        {"$match": {"_id": ObjectId(blog_id)}},
+
+        # Convert string IDs to ObjectId for lookups
+        {"$addFields": {
+            "doctor_obj_id": {"$toObjectId": "$doctor_id"},
+            "category_obj_id": {"$toObjectId": "$category_id"}
+        }},
+
+        # Lookup doctor
+        {
+            "$lookup": {
+                "from": "doctors",
+                "localField": "doctor_obj_id",
+                "foreignField": "_id",
+                "as": "doctor"
+            }
+        },
+        {"$unwind": {"path": "$doctor", "preserveNullAndEmptyArrays": True}},
+
+        # Lookup category
+        {
+            "$lookup": {
+                "from": "categories",
+                "localField": "category_obj_id",
+                "foreignField": "_id",
+                "as": "category"
+            }
+        },
+        {"$unwind": {"path": "$category", "preserveNullAndEmptyArrays": True}},
+    ]
+
+    cursor = db.blogs.aggregate(pipeline)
+    blog_data = await cursor.to_list(length=1)
+
+    if not blog_data:
+        raise BlogNotFound(f"Blog with id {blog_id} not found")
+
+    blog = blog_data[0]
+
+    # Convert ObjectIds to str
+    blog["_id"] = str(blog["_id"])
+    if "doctor" in blog and blog["doctor"]:
+        blog["doctor"]["_id"] = str(blog["doctor"]["_id"])
+    if "category" in blog and blog["category"]:
+        blog["category"]["_id"] = str(blog["category"]["_id"])
+
+    return Blog(**blog)
 
 
 async def update_blog(

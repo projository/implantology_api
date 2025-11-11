@@ -3,10 +3,11 @@ from typing import Optional
 from datetime import datetime
 from app.models.custom_types import PydanticObjectId
 
-class Category(BaseModel):
+class FAQ(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
-    type: str
-    name: str
+    category_id: str
+    question: str
+    answer: str
     created_at: datetime
     updated_at: datetime
 
@@ -16,11 +17,13 @@ class Category(BaseModel):
         json_encoders = {PydanticObjectId: str}
 
 
-class CategoryCreate(BaseModel):
-    type: str
-    name: str
+class FAQCreate(BaseModel):
+    category_id: str
+    question: str
+    answer: str
 
 
-class CategoryUpdate(BaseModel):
-    type: Optional[str] = None
-    name: Optional[str] = None
+class FAQUpdate(BaseModel):
+    category_id: Optional[str] = None
+    question: Optional[str] = None
+    answer: Optional[str] = None

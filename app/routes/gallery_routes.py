@@ -2,7 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from app.models.gallery import Gallery, GalleryCreate
 from app.crud.gallery_crud import (
-    list_galleries,
+    get_galleries,
     create_gallery,
     delete_gallery,
     GalleryNotFound,
@@ -19,22 +19,20 @@ async def get_db():
     return db
     
 
-# List all gallery
 @router.get("", response_model=PaginatedResponse[Gallery])
-async def list_all_galleries(
+async def list_galleries(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
     is_patient: bool = Query(False),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    galleries = await list_galleries(db, page, per_page, keyword, is_patient)
+    galleries = await get_galleries(db, page, per_page, keyword, is_patient)
     return galleries
 
 
-# Create a new gallery
 @router.post("", response_model=List[Gallery], status_code=status.HTTP_201_CREATED)
-async def create_new_gallery(
+async def add_gallery(
     gallery_create: GalleryCreate,
     is_patient: bool = Query(False),
     db: AsyncIOMotorDatabase = Depends(get_db),
@@ -43,9 +41,8 @@ async def create_new_gallery(
     return gallery
 
 
-# Delete a gallery
 @router.delete("/{gallery_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_existing_gallery(
+async def remove_gallery(
     gallery_id: str,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):

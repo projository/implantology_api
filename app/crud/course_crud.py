@@ -13,9 +13,11 @@ class CourseNotFound(Exception):
 
 async def get_courses(
     db: AsyncIOMotorDatabase,
+    type: Optional[str] = None,
+    is_free: Optional[bool] = None,
+    search_key: Optional[str] = None,
     page: int = 1,
-    per_page: int = 10,
-    search_key: Optional[str] = None
+    per_page: int = 10
 ) -> Dict[str, Any]:
     skip = (page - 1) * per_page
 
@@ -28,6 +30,15 @@ async def get_courses(
             ]
         }
 
+    if type:
+        query["type"] = type
+
+    if isinstance(is_free, str):
+        is_free = is_free.lower() == "true"
+
+    if is_free is not None:
+        query["is_free"] = is_free
+    
     # Aggregation pipeline with $lookup for instructor and category
     pipeline = [
         {"$match": query},

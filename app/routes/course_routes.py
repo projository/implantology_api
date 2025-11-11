@@ -21,12 +21,14 @@ async def get_db():
 
 @router.get("", response_model=PaginatedResponse[Course])
 async def list_courses(
+    type: str = Query(None),   
+    is_free: str = Query(None),   
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    courses = await get_courses(db, page, per_page, keyword)
+    courses = await get_courses(db, type, is_free, keyword, page, per_page)
     return courses
 
 

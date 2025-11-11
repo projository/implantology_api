@@ -8,7 +8,7 @@ from app.models.user import (
     UserUpdate,
 )
 from app.crud.user_crud import (
-    list_users,
+    get_users,
     create_user,
     get_user,
     update_user,
@@ -164,7 +164,7 @@ async def update_profile(
 
     
 @router.get("/users", response_model=PaginatedResponse[User])
-async def list_all_users(
+async def list_users(
     role: str = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
@@ -172,7 +172,7 @@ async def list_all_users(
     db: AsyncIOMotorDatabase = Depends(get_db),
     _=Depends(admin_required)
 ):
-    users = await list_users(db, role, page, per_page, keyword)
+    users = await get_users(db, role, page, per_page, keyword)
     return users
 
 
@@ -186,7 +186,7 @@ async def read_user(user_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_existing_user(
+async def remove_user(
     user_id: str,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):

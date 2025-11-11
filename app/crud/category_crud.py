@@ -10,16 +10,9 @@ class CategoryNotFound(Exception):
     pass
 
 
-async def get_category(db: AsyncIOMotorDatabase, category_id: str) -> Category:
-    category_data = await db.categories.find_one({"_id": ObjectId(category_id)})
-    if category_data:
-        category_data["_id"] = str(category_data["_id"])
-        return Category(**category_data)
-    raise CategoryNotFound(f"Category with id {category_id} not found")
-
-
-async def list_categories(
+async def get_categories(
     db: AsyncIOMotorDatabase,
+    type: Optional[str] = None,
     page: int = 1,
     per_page: int = 10,
     search_key: Optional[str] = None
@@ -36,6 +29,9 @@ async def list_categories(
                 # {"description": {"$regex": search_key, "$options": "i"}}
             ]
         }
+
+    if type:
+        query["type"] = type
 
     # Fetch paginated categories
     categories_cursor = db.categories.find(query).sort("created_at", -1).skip(skip).limit(per_page)
@@ -66,6 +62,14 @@ async def create_category(db: AsyncIOMotorDatabase, category_create: CategoryCre
     result = await db.categories.insert_one(category_data)
     category_data["_id"] = str(result.inserted_id)
     return Category(**category_data)
+
+
+async def get_category(db: AsyncIOMotorDatabase, category_id: str) -> Category:
+    category_data = await db.categories.find_one({"_id": ObjectId(category_id)})
+    if category_data:
+        category_data["_id"] = str(category_data["_id"])
+        return Category(**category_data)
+    raise CategoryNotFound(f"Category with id {category_id} not found")
 
 
 async def update_category(db: AsyncIOMotorDatabase, category_id: str, category_update: CategoryUpdate) -> Category:

@@ -11,7 +11,7 @@ class GalleryNotFound(Exception):
     pass
 
 
-async def list_galleries(
+async def get_galleries(
     db: AsyncIOMotorDatabase,
     page: int = 1,
     per_page: int = 10,

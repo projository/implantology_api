@@ -10,15 +10,7 @@ class CarouselNotFound(Exception):
     pass
 
 
-async def get_carousel(db: AsyncIOMotorDatabase, carousel_id: str) -> Carousel:
-    carousel_data = await db.carousels.find_one({"_id": ObjectId(carousel_id)})
-    if carousel_data:
-        carousel_data["_id"] = str(carousel_data["_id"])
-        return Carousel(**carousel_data)
-    raise CarouselNotFound(f"Carousel with id {carousel_id} not found")
-
-
-async def list_carousels(
+async def get_carousels(
     db: AsyncIOMotorDatabase,
     page: int = 1,
     per_page: int = 10,
@@ -57,7 +49,7 @@ async def list_carousels(
             "last_page": math.ceil(total / per_page) if per_page else 0
         }
     }
-# async def list_carousels(
+# async def get_carousels(
 #     db: AsyncIOMotorDatabase,
 #     page: int = 1,
 #     per_page: int = 10,
@@ -105,6 +97,14 @@ async def create_carousel(db: AsyncIOMotorDatabase, carousel_create: CarouselCre
     result = await db.carousels.insert_one(carousel_data)
     carousel_data["_id"] = str(result.inserted_id)
     return Carousel(**carousel_data)
+
+
+async def get_carousel(db: AsyncIOMotorDatabase, carousel_id: str) -> Carousel:
+    carousel_data = await db.carousels.find_one({"_id": ObjectId(carousel_id)})
+    if carousel_data:
+        carousel_data["_id"] = str(carousel_data["_id"])
+        return Carousel(**carousel_data)
+    raise CarouselNotFound(f"Carousel with id {carousel_id} not found")
 
 
 async def update_carousel(db: AsyncIOMotorDatabase, carousel_id: str, carousel_update: CarouselUpdate) -> Carousel:

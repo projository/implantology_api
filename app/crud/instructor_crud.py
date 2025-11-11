@@ -10,15 +10,7 @@ class InstructorNotFound(Exception):
     pass
 
 
-async def get_instructor(db: AsyncIOMotorDatabase, instructor_id: str) -> Instructor:
-    instructor_data = await db.instructors.find_one({"_id": ObjectId(instructor_id)})
-    if instructor_data:
-        instructor_data["_id"] = str(instructor_data["_id"])
-        return Instructor(**instructor_data)
-    raise InstructorNotFound(f"Instructor with id {instructor_id} not found")
-
-
-async def list_instructors(
+async def get_instructors(
     db: AsyncIOMotorDatabase,
     page: int = 1,
     per_page: int = 10,
@@ -66,6 +58,14 @@ async def create_instructor(db: AsyncIOMotorDatabase, instructor_create: Instruc
     result = await db.instructors.insert_one(instructor_data)
     instructor_data["_id"] = str(result.inserted_id)
     return Instructor(**instructor_data)
+
+
+async def get_instructor(db: AsyncIOMotorDatabase, instructor_id: str) -> Instructor:
+    instructor_data = await db.instructors.find_one({"_id": ObjectId(instructor_id)})
+    if instructor_data:
+        instructor_data["_id"] = str(instructor_data["_id"])
+        return Instructor(**instructor_data)
+    raise InstructorNotFound(f"Instructor with id {instructor_id} not found")
 
 
 async def update_instructor(db: AsyncIOMotorDatabase, instructor_id: str, instructor_update: InstructorUpdate) -> Instructor:

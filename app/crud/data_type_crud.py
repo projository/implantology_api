@@ -11,15 +11,7 @@ class DataTypeNotFound(Exception):
     pass
 
 
-async def get_data_type(db: AsyncIOMotorDatabase, data_type_id: str) -> DataType:
-    data_type_data = await db.data_types.find_one({"_id": ObjectId(data_type_id)})
-    if data_type_data:
-        data_type_data["_id"] = str(data_type_data["_id"])
-        return DataType(**data_type_data)
-    raise DataTypeNotFound(f"DataType with id {data_type_id} not found")
-
-
-async def list_data_types(
+async def get_data_types(
     db: AsyncIOMotorDatabase,
     page: int = 1,
     per_page: int = 10,
@@ -59,6 +51,7 @@ async def list_data_types(
         }
     }
 
+
 async def create_data_type(db: AsyncIOMotorDatabase, data_type_create: DataTypeCreate) -> DataType:
     data_type_data = data_type_create.dict()
     data_type_data["created_at"] = datetime.now()
@@ -66,6 +59,14 @@ async def create_data_type(db: AsyncIOMotorDatabase, data_type_create: DataTypeC
     result = await db.data_types.insert_one(data_type_data)
     data_type_data["_id"] = str(result.inserted_id)
     return DataType(**data_type_data)
+
+
+async def get_data_type(db: AsyncIOMotorDatabase, data_type_id: str) -> DataType:
+    data_type_data = await db.data_types.find_one({"_id": ObjectId(data_type_id)})
+    if data_type_data:
+        data_type_data["_id"] = str(data_type_data["_id"])
+        return DataType(**data_type_data)
+    raise DataTypeNotFound(f"DataType with id {data_type_id} not found")
 
 
 async def update_data_type(db: AsyncIOMotorDatabase, data_type_id: str, data_type_update: DataTypeUpdate) -> DataType:

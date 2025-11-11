@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from app.models.doctor import Doctor, DoctorCreate, DoctorUpdate
 from app.crud.doctor_crud import (
-    get_doctor,
-    list_doctors,
+    get_doctors,
     create_doctor,
+    get_doctor,
     update_doctor,
     delete_doctor,
     DoctorNotFound,
@@ -19,7 +19,27 @@ async def get_db():
     db = await get_database()
     return db
     
-# Read doctor by ID
+
+@router.get("", response_model=PaginatedResponse[Doctor])
+async def list_doctors(
+    keyword: str = Query(None),   
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    db: AsyncIOMotorDatabase = Depends(get_db)
+):
+    doctors = await get_doctors(db, page, per_page, keyword)
+    return doctors
+
+
+@router.post("", response_model=Doctor, status_code=status.HTTP_201_CREATED)
+async def add_doctor(
+    doctor_create: DoctorCreate,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    doctor = await create_doctor(db, doctor_create)
+    return doctor
+
+
 @router.get("/{doctor_id}", response_model=Doctor)
 async def read_doctor(doctor_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
     try:
@@ -29,31 +49,8 @@ async def read_doctor(doctor_id: str, db: AsyncIOMotorDatabase = Depends(get_db)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-# List all doctor
-@router.get("", response_model=PaginatedResponse[Doctor])
-async def list_all_doctors(
-    keyword: str = Query(None),   
-    page: int = Query(1, ge=1),
-    per_page: int = Query(10, ge=1, le=100),
-    db: AsyncIOMotorDatabase = Depends(get_db)
-):
-    doctors = await list_doctors(db, page, per_page, keyword)
-    return doctors
-
-
-# Create a new doctor
-@router.post("", response_model=Doctor, status_code=status.HTTP_201_CREATED)
-async def create_new_doctor(
-    doctor_create: DoctorCreate,
-    db: AsyncIOMotorDatabase = Depends(get_db),
-):
-    doctor = await create_doctor(db, doctor_create)
-    return doctor
-
-
-# Update an existing doctor
 @router.put("/{doctor_id}", response_model=Doctor)
-async def update_existing_doctor(
+async def modify_doctor(
     doctor_id: str,
     doctor_update: DoctorUpdate,
     db: AsyncIOMotorDatabase = Depends(get_db),
@@ -65,9 +62,8 @@ async def update_existing_doctor(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
-# Delete a doctor
 @router.delete("/{doctor_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_existing_doctor(
+async def remove_doctor(
     doctor_id: str,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
