@@ -22,12 +22,13 @@ async def get_db():
 
 @router.get("", response_model=PaginatedResponse[FAQ])
 async def list_faqs(
+    category_id: str = Query(None),   
     keyword: str = Query(None),   
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
     db: AsyncIOMotorDatabase = Depends(get_db)
 ):
-    faqs = await get_faqs(db, page, per_page, keyword)
+    faqs = await get_faqs(db, category_id, page, per_page, keyword)
     return faqs
 
 

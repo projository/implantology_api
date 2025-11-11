@@ -12,6 +12,7 @@ class FAQNotFound(Exception):
 
 async def get_faqs(
     db: AsyncIOMotorDatabase,
+    category_id: str,
     page: int = 1,
     per_page: int = 10,
     search_key: Optional[str] = None
@@ -28,6 +29,9 @@ async def get_faqs(
                 # {"description": {"$regex": search_key, "$options": "i"}}
             ]
         }
+
+    if category_id:
+        query["category_id"] = category_id
 
     # Fetch paginated faqs
     faqs_cursor = db.faqs.find(query).sort("created_at", -1).skip(skip).limit(per_page)
