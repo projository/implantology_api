@@ -12,7 +12,7 @@ class FAQNotFound(Exception):
 
 async def get_faqs(
     db: AsyncIOMotorDatabase,
-    category_id: str,
+    category_id: Optional[str] = None,
     page: int = 1,
     per_page: int = 10,
     search_key: Optional[str] = None
