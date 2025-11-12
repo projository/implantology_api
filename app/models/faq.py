@@ -1,11 +1,13 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
+from app.models.category import Category
 from app.models.custom_types import PydanticObjectId
 
 class FAQ(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
     category_id: str
+    category: Optional[Category] = None
     question: str
     answer: str
     created_at: datetime
