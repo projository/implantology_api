@@ -12,30 +12,35 @@ class FAQNotFound(Exception):
 
 async def get_faqs(
     db: AsyncIOMotorDatabase,
+    category_id: Optional[str] = None,
     page: int = 1,
     per_page: int = 10,
     search_key: Optional[str] = None
 ) -> Dict[str, Any]:
     skip = (page - 1) * per_page
 
-    # Build search query
+    # Base query
     query: Dict[str, Any] = {}
-    if search_key:
-        query = {
-            "$or": [
-                {"question": {"$regex": search_key, "$options": "i"}},
-                {"answer": {"$regex": search_key, "$options": "i"}},
-            ]
-        }
 
-    # Aggregation pipeline with category lookup
+    # Add search key
+    if search_key:
+        query["$or"] = [
+            {"question": {"$regex": search_key, "$options": "i"}},
+            {"answer": {"$regex": search_key, "$options": "i"}},
+        ]
+
+    # Add category filter
+    if category_id:
+        query["category_id"] = category_id
+
+    # Aggregation pipeline
     pipeline = [
         {"$match": query},
         {"$sort": {"created_at": -1}},
         {"$skip": skip},
         {"$limit": per_page},
 
-        # Convert category_id string to ObjectId
+        # Convert category_id to ObjectId
         {"$addFields": {
             "category_obj_id": {"$toObjectId": "$category_id"}
         }},
@@ -64,18 +69,17 @@ async def get_faqs(
             if "_id" in faq["category"]:
                 faq["category"]["_id"] = str(faq["category"]["_id"])
 
-    # Count total for pagination
+    # Total count for pagination
     total = await db.faqs.count_documents(query)
 
-    # Return data and pagination
     return {
-        "data": [FAQ(**faq) for faq in faqs],  # Use FAQ model for validation
+        "data": [FAQ(**faq) for faq in faqs],
         "pagination": {
             "current_page": page,
             "per_page": per_page,
             "total": total,
             "last_page": math.ceil(total / per_page) if per_page else 0,
-        }
+        },
     }
 
 
