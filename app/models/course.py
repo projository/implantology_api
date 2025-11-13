@@ -32,7 +32,7 @@ class Course(BaseModel):
     instructors: Optional[List[Instructor]] = []
     language: str
     students: Optional[int] = 0
-    commints: Optional[int] = 0
+    comments: Optional[int] = 0
     lectures: int
     quizzes: int
     assessments: bool
