@@ -203,7 +203,7 @@ async def get_course(db: AsyncIOMotorDatabase, course_id: str) -> Course:
         {"$addFields": {
             "instructor_obj_ids": {
                 "$map": {
-                    "input": "$instructor_ids",   # <- assumes course has instructor_ids: [str]
+                    "input": "$instructor_ids",
                     "as": "id",
                     "in": {"$toObjectId": "$$id"}
                 }
@@ -221,7 +221,7 @@ async def get_course(db: AsyncIOMotorDatabase, course_id: str) -> Course:
             }
         },
 
-        # Lookup category
+        # Lookup single category
         {
             "$lookup": {
                 "from": "categories",
@@ -231,6 +231,58 @@ async def get_course(db: AsyncIOMotorDatabase, course_id: str) -> Course:
             }
         },
         {"$unwind": {"path": "$category", "preserveNullAndEmptyArrays": True}},
+
+        # Lookup enrollments (students)
+        {
+            "$lookup": {
+                "from": "enrollments",
+                "let": {"courseId": {"$toString": "$_id"}},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$course_id", "$$courseId"]}}},
+                    {"$count": "count"}
+                ],
+                "as": "students"
+            }
+        },
+
+        # Lookup reviews (comments)
+        {
+            "$lookup": {
+                "from": "reviews",
+                "let": {"courseId": "$_id"},
+                "pipeline": [
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$and": [
+                                    {"$eq": [{"$toLower": "$type"}, "course"]},
+                                    {
+                                        "$or": [
+                                            {"$eq": ["$type_id", "$$courseId"]},
+                                            {"$eq": ["$type_id", {"$toString": "$$courseId"}]}
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    {"$count": "count"}
+                ],
+                "as": "comments"
+            }
+        },
+
+        # Flatten counts
+        {
+            "$addFields": {
+                "students": {
+                    "$ifNull": [{"$arrayElemAt": ["$students.count", 0]}, 0]
+                },
+                "comments": {
+                    "$ifNull": [{"$arrayElemAt": ["$comments.count", 0]}, 0]
+                }
+            }
+        }
     ]
 
     cursor = db.courses.aggregate(pipeline)
@@ -241,7 +293,7 @@ async def get_course(db: AsyncIOMotorDatabase, course_id: str) -> Course:
 
     course = course_data[0]
 
-    # Convert ObjectIds to str
+    # Convert ObjectIds to str for response
     course["_id"] = str(course["_id"])
 
     if "instructors" in course and isinstance(course["instructors"], list):
