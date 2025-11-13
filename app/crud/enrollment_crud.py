@@ -5,11 +5,17 @@ from bson import ObjectId
 from datetime import datetime
 from app.models.enrollment import Enrollment, EnrollmentCreate, EnrollmentUpdate
 import math
+import random
+import string
 
 
 # Exception class for enrollment not found
 class EnrollmentNotFound(Exception):
     pass
+
+
+def generate_key() -> str:
+    return ''.join(random.choice(string.ascii_letters) for _ in range(28))
 
 
 async def get_enrollments(
@@ -196,6 +202,10 @@ async def create_enrollment(
 ) -> Enrollment:
     enrollment_data = enrollment_create.dict()
     
+    if enrollment_data["order_id"] == "":
+        key = generate_key()
+        enrollment_data["order_id"] = f"free_{key}"
+
     enrollment_data["user_id"] = user_id
     enrollment_data["created_at"] = datetime.now()
     enrollment_data["updated_at"] = datetime.now()
