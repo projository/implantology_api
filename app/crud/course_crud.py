@@ -38,15 +38,15 @@ async def get_courses(
 
     if is_free is not None:
         query["is_free"] = is_free
-    
-    # Aggregation pipeline with $lookup for instructor and category
+
+    # Aggregation pipeline with lookups
     pipeline = [
         {"$match": query},
         {"$sort": {"created_at": -1}},
         {"$skip": skip},
         {"$limit": per_page},
 
-        # Convert string instructor_ids to ObjectIds
+        # Convert string instructor_ids/category_id to ObjectIds
         {"$addFields": {
             "instructor_obj_ids": {
                 "$map": {
@@ -58,7 +58,7 @@ async def get_courses(
             "category_obj_id": {"$toObjectId": "$category_id"}
         }},
 
-        # Lookup multiple instructors
+        # Lookup instructors
         {
             "$lookup": {
                 "from": "instructors",
@@ -68,7 +68,7 @@ async def get_courses(
             }
         },
 
-        # Lookup single category
+        # Lookup category
         {
             "$lookup": {
                 "from": "categories",
@@ -78,13 +78,60 @@ async def get_courses(
             }
         },
         {"$unwind": {"path": "$category", "preserveNullAndEmptyArrays": True}},
+
+        # Lookup enrollments (students)
+        {
+            "$lookup": {
+                "from": "enrollments",
+                "let": {"courseId": {"$toString": "$_id"}},
+                "pipeline": [
+                    {"$match": {"$expr": {"$eq": ["$course_id", "$$courseId"]}}},
+                    {"$count": "count"}
+                ],
+                "as": "students"
+            }
+        },
+
+        # Lookup reviews (comments)
+        {
+            "$lookup": {
+                "from": "reviews",
+                "let": {"courseId": {"$toString": "$_id"}},
+                "pipeline": [
+                    {
+                        "$match": {
+                            "$expr": {
+                                "$and": [
+                                    {"$eq": ["$type", "COURSE"]},
+                                    {"$eq": ["$type_id", "$$courseId"]}
+                                ]
+                            }
+                        }
+                    },
+                    {"$count": "count"}
+                ],
+                "as": "comments"
+            }
+        },
+
+        # Flatten counts (convert arrays to int values)
+        {
+            "$addFields": {
+                "students": {
+                    "$ifNull": [{"$arrayElemAt": ["$students.count", 0]}, 0]
+                },
+                "comments": {
+                    "$ifNull": [{"$arrayElemAt": ["$comments.count", 0]}, 0]
+                }
+            }
+        },
     ]
 
     # Run aggregation
     courses_cursor = db.courses.aggregate(pipeline)
     courses = await courses_cursor.to_list(length=per_page)
 
-    # Convert ObjectIds to strings
+    # Convert ObjectIds to strings for frontend
     for course in courses:
         if "_id" in course:
             course["_id"] = str(course["_id"])
@@ -96,11 +143,11 @@ async def get_courses(
             if "_id" in course["category"]:
                 course["category"]["_id"] = str(course["category"]["_id"])
 
-    # Count total for pagination
+    # Count total courses for pagination
     total = await db.courses.count_documents(query)
 
     return {
-        "data": [Course(**course) for course in courses],  # Validate against Course schema
+        "data": [Course(**course) for course in courses],
         "pagination": {
             "current_page": page,
             "per_page": per_page,
