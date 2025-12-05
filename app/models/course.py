@@ -10,10 +10,10 @@ class Data(BaseModel):
     value: str
 
 class Price(BaseModel):
+    message: str
     duration: Optional[str] = None
     start_at: datetime
     end_at: datetime
-    is_free: bool
     price: int
     offer_start_at: Optional[datetime] = None
     offer_end_at: Optional[datetime] = None
@@ -29,6 +29,7 @@ class Course(BaseModel):
     short_desc: str
     desc: List[Data]
     location: str
+    is_free: bool
     prices: List[Price]
     instructor_ids: List[str]
     instructors: Optional[List[Instructor]] = []
@@ -55,6 +56,7 @@ class CourseCreate(BaseModel):
     short_desc: str
     desc: List[Data]
     location: str
+    is_free: bool
     prices: List[Price]
     instructor_ids: List[str]
     language: str
@@ -71,6 +73,7 @@ class CourseUpdate(BaseModel):
     short_desc: Optional[str] = None
     desc: Optional[List[Data]] = None
     location: Optional[str] = None
+    is_free: Optional[bool] = None
     prices: Optional[List[Price]] = None
     instructor_ids: Optional[List[str]] = None
     language: Optional[str] = None

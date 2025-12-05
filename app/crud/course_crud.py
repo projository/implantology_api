@@ -160,32 +160,31 @@ async def get_courses(
 async def create_course(db: AsyncIOMotorDatabase, course_create: CourseCreate) -> Course:
     course_data = course_create.dict()
 
-    # Calculate duration (in days or hours, as you prefer)
-    start = course_create.start_at
-    end = course_create.end_at
+    for i, price in enumerate(course_create.prices):
+        # Calculate duration (in days or hours, as you prefer)
+        start = price.start_at
+        end = price.end_at
 
-    start = course_create.start_at
-    end = course_create.end_at
+        if start and end:
+            total_days = (end.date() - start.date()).days + 1
 
-    if start and end:
-        total_days = (end.date() - start.date()).days + 1
+            # Convert to months + days
+            months = total_days // 30
+            days = total_days % 30
 
-        # Convert to months and days
-        months = total_days // 30
-        days = total_days % 30
+            # Build duration string
+            if months == 0:
+                duration_str = f"{days} days"
+            elif days == 0:
+                duration_str = f"{months} month{'s' if months > 1 else ''}"
+            else:
+                duration_str = f"{months} month{'s' if months > 1 else ''} {days} days"
 
-        # Build human-readable string
-        if months == 0:
-            duration_str = f"{days} days"
-        elif days == 0:
-            duration_str = f"{months} month{'s' if months > 1 else ''}"
+            # Update correct price entry in dictionary
+            course_data["prices"][i]["duration"] = duration_str
         else:
-            duration_str = f"{months} month{'s' if months > 1 else ''} {days} days"
-
-        course_data["duration"] = duration_str
-    else:
-        course_data["duration"] = None
-    
+            course_data["prices"][i]["duration"] = None
+                
     course_data["created_at"] = datetime.now()
     course_data["updated_at"] = datetime.now()
 
