@@ -9,6 +9,15 @@ class Data(BaseModel):
     data_type_id: str
     value: str
 
+class Price(BaseModel):
+    message: str
+    duration: Optional[str] = None
+    start_at: datetime
+    end_at: datetime
+    price: int
+    offer_start_at: Optional[datetime] = None
+    offer_end_at: Optional[datetime] = None
+    offer_price: Optional[int] = 0
 
 class Course(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
@@ -20,14 +29,8 @@ class Course(BaseModel):
     short_desc: str
     desc: List[Data]
     location: str
-    duration: Optional[str] = None
-    start_at: datetime
-    end_at: datetime
     is_free: bool
-    price: int
-    offer_start_at: Optional[datetime] = None
-    offer_end_at: Optional[datetime] = None
-    offer_price: Optional[int] = 0
+    prices: List[Price]
     instructor_ids: List[str]
     instructors: Optional[List[Instructor]] = []
     language: str
@@ -53,13 +56,8 @@ class CourseCreate(BaseModel):
     short_desc: str
     desc: List[Data]
     location: str
-    start_at: datetime
-    end_at: datetime
     is_free: bool
-    price: int
-    offer_start_at: Optional[datetime] = None
-    offer_end_at: Optional[datetime] = None
-    offer_price: Optional[int] = 0
+    prices: List[Price]
     instructor_ids: List[str]
     language: str
     lectures: int
@@ -75,13 +73,8 @@ class CourseUpdate(BaseModel):
     short_desc: Optional[str] = None
     desc: Optional[List[Data]] = None
     location: Optional[str] = None
-    start_at: Optional[datetime] = None
-    end_at: Optional[datetime] = None
     is_free: Optional[bool] = None
-    price: Optional[int] = 0
-    offer_start_at: Optional[datetime] = None
-    offer_end_at: Optional[datetime] = None
-    offer_price: Optional[int] = 0
+    prices: Optional[List[Price]] = None
     instructor_ids: Optional[List[str]] = None
     language: Optional[str] = None
     lectures: Optional[int] = None
