@@ -9,15 +9,10 @@ class Data(BaseModel):
     data_type_id: str
     value: str
 
-class Price(BaseModel):
-    message: str
-    duration: Optional[str] = None
-    start_at: datetime
-    end_at: datetime
+class Variant(BaseModel):
+    title: str
+    description: str
     price: int
-    offer_start_at: Optional[datetime] = None
-    offer_end_at: Optional[datetime] = None
-    offer_price: Optional[int] = 0
 
 class Course(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
@@ -30,7 +25,16 @@ class Course(BaseModel):
     desc: List[Data]
     location: str
     is_free: bool
-    prices: List[Price]
+    duration: Optional[str] = None
+    start_at: datetime
+    end_at: datetime
+    title: str
+    description: str
+    price: int
+    offer_start_at: Optional[datetime] = None
+    offer_end_at: Optional[datetime] = None
+    offer_price: Optional[int] = 0
+    variants: List[Variant]
     instructor_ids: List[str]
     instructors: Optional[List[Instructor]] = []
     language: str
@@ -57,7 +61,15 @@ class CourseCreate(BaseModel):
     desc: List[Data]
     location: str
     is_free: bool
-    prices: List[Price]
+    start_at: datetime
+    end_at: datetime
+    title: str
+    description: str
+    price: int
+    offer_start_at: Optional[datetime] = None
+    offer_end_at: Optional[datetime] = None
+    offer_price: Optional[int] = 0
+    variants: List[Variant]
     instructor_ids: List[str]
     language: str
     lectures: int
@@ -74,7 +86,15 @@ class CourseUpdate(BaseModel):
     desc: Optional[List[Data]] = None
     location: Optional[str] = None
     is_free: Optional[bool] = None
-    prices: Optional[List[Price]] = None
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[int] = None
+    offer_start_at: Optional[datetime] = None
+    offer_end_at: Optional[datetime] = None
+    offer_price: Optional[int] = 0
+    variants: Optional[List[Variant]] = None
     instructor_ids: Optional[List[str]] = None
     language: Optional[str] = None
     lectures: Optional[int] = None
