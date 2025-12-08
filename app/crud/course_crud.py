@@ -1,10 +1,9 @@
 from typing import Dict, Any, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
-from datetime import datetime
 from app.models.course import Course, CourseCreate, CourseUpdate
+from datetime import datetime, timezone
 import math
-
 
 # Exception class for course not found
 class CourseNotFound(Exception):
@@ -160,23 +159,40 @@ async def get_courses(
 async def create_course(db: AsyncIOMotorDatabase, course_create: CourseCreate) -> Course:
     course_data = course_create.dict()
 
-    # Calculate duration (in days or hours, as you prefer)
-    start = course_create.start_at
-    end = course_create.end_at
+    # Helper to parse or convert datetime
+    def _ensure_dt(v):
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v
+        try:
+            return datetime.fromisoformat(v)
+        except:
+            return None
 
-    start = course_create.start_at
-    end = course_create.end_at
+    start = _ensure_dt(course_create.start_at)
+    end = _ensure_dt(course_create.end_at)
 
     if start and end:
-        total_days = (end.date() - start.date()).days + 1
+        # Normalize timezone-aware dates to UTC
+        if start.tzinfo:
+            start_date = start.astimezone(timezone.utc).date()
+        else:
+            start_date = start.date()
 
-        # Convert to months and days
+        if end.tzinfo:
+            end_date = end.astimezone(timezone.utc).date()
+        else:
+            end_date = end.date()
+
+        total_days = (end_date - start_date).days + 1
+        total_days = max(total_days, 0)  # avoid negative
+
         months = total_days // 30
         days = total_days % 30
 
-        # Build human-readable string
         if months == 0:
-            duration_str = f"{days} days"
+            duration_str = f"{days} days" if days != 1 else "1 day"
         elif days == 0:
             duration_str = f"{months} month{'s' if months > 1 else ''}"
         else:
@@ -185,13 +201,15 @@ async def create_course(db: AsyncIOMotorDatabase, course_create: CourseCreate) -
         course_data["duration"] = duration_str
     else:
         course_data["duration"] = None
-    
-    course_data["created_at"] = datetime.now()
-    course_data["updated_at"] = datetime.now()
 
+    # Timestamps
+    course_data["created_at"] = datetime.utcnow()
+    course_data["updated_at"] = datetime.utcnow()
+
+    # Insert
     result = await db.courses.insert_one(course_data)
     course_data["_id"] = str(result.inserted_id)
-    
+
     return Course(**course_data)
 
 
@@ -314,7 +332,62 @@ async def update_course(
     course_update: CourseUpdate
 ) -> Course:
     update_data = {k: v for k, v in course_update.dict().items() if v is not None}
-    update_data["updated_at"] = datetime.now()
+
+    # Helper to ensure valid datetime
+    def _ensure_dt(v):
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v
+        try:
+            return datetime.fromisoformat(v)
+        except:
+            return None
+
+    # Check if start_at or end_at is being updated
+    incoming_start = update_data.get("start_at")
+    incoming_end = update_data.get("end_at")
+
+    if incoming_start is not None or incoming_end is not None:
+        # Fetch existing course
+        existing = await db.courses.find_one({"_id": ObjectId(course_id)})
+
+        if not existing:
+            raise CourseNotFound(f"Course with id {course_id} not found")
+
+        # Use updated values or fallback to existing values
+        start = _ensure_dt(incoming_start) or existing.get("start_at")
+        end = _ensure_dt(incoming_end) or existing.get("end_at")
+
+        if start and end:
+            # Convert to dates (UTC normalize if needed)
+            if start.tzinfo:
+                start_date = start.astimezone(timezone.utc).date()
+            else:
+                start_date = start.date()
+
+            if end.tzinfo:
+                end_date = end.astimezone(timezone.utc).date()
+            else:
+                end_date = end.date()
+
+            total_days = (end_date - start_date).days + 1
+            total_days = max(total_days, 0)
+
+            # Convert to months + days
+            months = total_days // 30
+            days = total_days % 30
+
+            if months == 0:
+                duration_str = f"{days} days" if days != 1 else "1 day"
+            elif days == 0:
+                duration_str = f"{months} month{'s' if months > 1 else ''}"
+            else:
+                duration_str = f"{months} month{'s' if months > 1 else ''} {days} days"
+
+            update_data["duration"] = duration_str
+
+    update_data["updated_at"] = datetime.utcnow()
 
     result = await db.courses.update_one(
         {"_id": ObjectId(course_id)},
@@ -324,6 +397,7 @@ async def update_course(
     if result.matched_count == 0:
         raise CourseNotFound(f"Course with id {course_id} not found")
 
+    # Return updated object
     return await get_course(db, course_id)
 
 
