@@ -11,6 +11,7 @@ from app.models.intent import (
     ChatResponse,
 )
 from app.crud.intent_crud import (
+    delete_all_intents,
     get_intents,
     create_intent,
     get_intent,
@@ -58,6 +59,20 @@ async def upload_excel(
     return {
         "message": "Upload completed",
         **result
+    }
+
+
+# ───────────── DELETE ─────────────
+
+@router.delete("/clear")
+async def remove_all_intents(
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    deleted_count = await delete_all_intents(db)
+
+    return {
+        "message": "All intents deleted successfully",
+        "deleted_count": deleted_count
     }
 
 

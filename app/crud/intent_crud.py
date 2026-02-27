@@ -71,6 +71,10 @@ async def delete_intent(db: AsyncIOMotorDatabase, intent_id: str):
     return True
 
 
+async def delete_all_intents(db: AsyncIOMotorDatabase) -> int:
+    result = await db.intents.delete_many({})
+    return result.deleted_count
+
 # ───────────────── LIST WITH PAGINATION ─────────────────
 
 async def get_intents(
