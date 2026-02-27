@@ -1,12 +1,15 @@
 # app/crud/intent_crud.py
 
-from typing import Dict, Any, Optional, List
+import math
+import re
+import pandas as pd
+
+from typing import Dict, Any, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from datetime import datetime
 from collections import Counter
-import math
-import re
+from io import BytesIO
 
 from app.models.intent import Intent, IntentCreate, IntentUpdate
 
@@ -198,4 +201,74 @@ async def generate_reply(
         "intent": None,
         "confidence": 0.0,
         "fallback": True,
+    }
+
+
+async def upload_intents(
+    db: AsyncIOMotorDatabase,
+    file_bytes: bytes
+) -> Dict[str, Any]:
+
+    df = pd.read_excel(BytesIO(file_bytes))
+
+    inserted = []
+    errors = []
+
+    for index, row in df.iterrows():
+        try:
+            # ─── Parse examples ───
+            examples = []
+            if pd.notna(row.get("examples")):
+                examples = [
+                    e.strip()
+                    for e in str(row["examples"]).split(",")
+                    if e.strip()
+                ]
+
+            # ─── Parse keywords ───
+            keywords = []
+            if pd.notna(row.get("keywords")):
+                for item in str(row["keywords"]).split(","):
+                    if ":" in item:
+                        word, weight = item.split(":")
+                        keywords.append({
+                            "word": word.strip(),
+                            "weight": int(weight.strip())
+                        })
+
+            # ─── Build Intent Document ───
+            intent_data = {
+                "intent": row["intent"],
+                "examples": examples,
+                "keywords": keywords,
+                "response": row["response"],
+                "priority": int(row.get("priority", 0)),
+                "is_active": bool(row.get("is_active", True)),
+                "is_fallback": bool(row.get("is_fallback", False)),
+                "created_at": datetime.now(),
+                "updated_at": datetime.now(),
+                "match_count": 0,
+                "positive_feedback": 0,
+                "negative_feedback": 0,
+                "user_weights": {}
+            }
+
+            # Optional: Prevent duplicate intent names
+            existing = await db.intents.find_one({"intent": intent_data["intent"]})
+            if existing:
+                continue
+
+            await db.intents.insert_one(intent_data)
+            inserted.append(intent_data["intent"])
+
+        except Exception as e:
+            errors.append({
+                "row": index + 1,
+                "error": str(e)
+            })
+
+    return {
+        "inserted_count": len(inserted),
+        "inserted_intents": inserted,
+        "errors": errors
     }

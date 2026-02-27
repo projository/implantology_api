@@ -1,6 +1,6 @@
 # app/routes/intent_routes.py
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.models.intent import (
@@ -18,6 +18,7 @@ from app.crud.intent_crud import (
     delete_intent,
     generate_reply,
     IntentNotFound,
+    upload_intents,
 )
 from app.utils.database import get_database
 from app.models.pagination import PaginatedResponse
@@ -38,6 +39,26 @@ async def intent(
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
     return await generate_reply(db, payload.message)
+
+
+# ───────────── UPLOAD INTENTS ─────────────
+
+@router.post("/upload")
+async def upload_excel(
+    file: UploadFile = File(...),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    if not file.filename.endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Only .xlsx files allowed")
+
+    file_bytes = await file.read()
+
+    result = await upload_intents(db, file_bytes)
+
+    return {
+        "message": "Upload completed",
+        **result
+    }
 
 
 # ───────────── LIST ─────────────
