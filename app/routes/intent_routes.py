@@ -37,9 +37,10 @@ async def get_db():
 @router.post("/request", response_model=ChatResponse)
 async def intent(
     payload: ChatRequest,
+    session_id: str = Query(None),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
-    return await generate_reply(db, payload.message)
+    return await generate_reply(db, payload.message, session_id)
 
 
 # ───────────── UPLOAD INTENTS ─────────────
