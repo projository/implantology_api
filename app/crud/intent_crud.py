@@ -2,7 +2,10 @@
 
 import math
 import re
+import random
 import pandas as pd
+
+from rapidfuzz import fuzz
 
 from typing import Dict, Any, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -121,8 +124,7 @@ async def get_intents(
 # ───────────────── CHAT MATCHING LOGIC ─────────────────
 
 STOPWORDS = {"the", "a", "an"}
-CONFIDENCE_THRESHOLD = 0.3
-
+CONFIDENCE_THRESHOLD = 0.45
 
 def _normalize(text: str):
     text = text.lower().strip()
@@ -149,40 +151,91 @@ def _cosine_similarity(a: Counter, b: Counter):
 async def generate_reply(
     db: AsyncIOMotorDatabase,
     message: str,
+    session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
 
     normalized = _normalize(message)
     words = _tokenize(normalized)
     message_vector = Counter(words)
 
-    intents_cursor = db.intents.find({"is_active": True})
-    intents = await intents_cursor.to_list(length=None)
+    session = None
+    if session_id:
+        session = await db.sessions.find_one({"session_id": session_id})
+
+    intents = await db.intents.find({"is_active": True}).to_list(None)
 
     best_intent = None
-    best_score = 0
+    best_score = 0.0
 
     for intent in intents:
-        examples_text = " ".join(intent.get("examples", []) + [intent["intent"]])
+
+        examples_text = " ".join(
+            intent.get("examples", []) + [intent["intent"]]
+        )
+
         intent_words = _tokenize(_normalize(examples_text))
         intent_vector = Counter(intent_words)
 
+        # 1️⃣ Cosine Similarity
         cosine = _cosine_similarity(message_vector, intent_vector)
-        score = cosine * 5
+
+        # 2️⃣ Fuzzy Matching
+        fuzzy_score = fuzz.partial_ratio(
+            normalized,
+            _normalize(examples_text)
+        ) / 100
+
+        # 3️⃣ Keyword Weighted Score (Normalized)
+        keyword_score = 0
+        total_weight = 0
 
         for kw in intent.get("keywords", []):
-            if kw["word"] in words:
-                score += kw["weight"] * 2
+            total_weight += kw.get("weight", 1)
+            if kw["word"].lower() in words:
+                keyword_score += kw.get("weight", 1)
 
-        score += intent.get("priority", 0) * 0.5
-        score += intent.get("match_count", 0) * 0.05
+        if total_weight > 0:
+            keyword_score = keyword_score / total_weight
+        else:
+            keyword_score = 0
+
+        # 4️⃣ Feedback Learning Boost
+        positive = intent.get("positive_feedback", 0)
+        negative = intent.get("negative_feedback", 0)
+
+        feedback_score = 0
+        if positive + negative > 0:
+            feedback_score = positive / (positive + negative)
+
+        # 5️⃣ Priority Normalized
+        priority = intent.get("priority", 0)
+        priority_score = min(priority / 10, 1)
+
+        # 🔥 Final Weighted Score (0–1 range)
+        score = (
+            cosine * 0.35 +
+            fuzzy_score * 0.30 +
+            keyword_score * 0.20 +
+            feedback_score * 0.10 +
+            priority_score * 0.05
+        )
+
+        # Context Boost
+        if session and len(words) <= 2:
+            if session.get("last_intent") == intent["intent"]:
+                score += 0.1
 
         if score > best_score:
             best_score = score
             best_intent = intent
 
-    confidence = min(best_score / 10, 1.0)
+    confidence = round(best_score, 3)
 
     if best_intent and confidence >= CONFIDENCE_THRESHOLD:
+
+        responses = best_intent.get("responses", [])
+        reply = random.choice(responses) if responses else "Okay."
+
         await db.intents.update_one(
             {"_id": best_intent["_id"]},
             {
@@ -191,19 +244,38 @@ async def generate_reply(
             },
         )
 
+        if session_id:
+            await db.sessions.update_one(
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "last_intent": best_intent["intent"],
+                        "last_message": message,
+                        "updated_at": datetime.now(),
+                    },
+                    "$setOnInsert": {
+                        "created_at": datetime.now(),
+                        "context": {},
+                    },
+                },
+                upsert=True,
+            )
+
         return {
-            "message": best_intent["response"],
+            "message": reply,
             "intent": best_intent["intent"],
-            "confidence": round(confidence, 3),
+            "confidence": confidence,
             "fallback": False,
         }
 
-    fallback = await db.intents.find_one({"is_fallback": True})
-
     return {
-        "message": fallback["response"] if fallback else "I'm still learning.",
+        "message": random.choice([
+            "Hmm 🤔 I didn’t quite understand that.",
+            "Could you rephrase that?",
+            "I'm not sure I understood. Can you try again?"
+        ]),
         "intent": None,
-        "confidence": 0.0,
+        "confidence": confidence,
         "fallback": True,
     }
 
@@ -225,14 +297,14 @@ async def upload_intents(
             if pd.notna(row.get("examples")):
                 examples = [
                     e.strip()
-                    for e in str(row["examples"]).split(",")
+                    for e in str(row["examples"]).split("|")
                     if e.strip()
                 ]
 
             # ─── Parse keywords ───
             keywords = []
             if pd.notna(row.get("keywords")):
-                for item in str(row["keywords"]).split(","):
+                for item in str(row["keywords"]).split("|"):
                     if ":" in item:
                         word, weight = item.split(":")
                         keywords.append({
@@ -240,12 +312,21 @@ async def upload_intents(
                             "weight": int(weight.strip())
                         })
 
+            # ─── Parse responses ───
+            responses = []
+            if pd.notna(row.get("responses")):
+                responses = [
+                    r.strip()
+                    for r in str(row["responses"]).split("|")
+                    if r.strip()
+                ]
+
             # ─── Build Intent Document ───
             intent_data = {
                 "intent": row["intent"],
                 "examples": examples,
                 "keywords": keywords,
-                "response": row["response"],
+                "response": responses,
                 "priority": int(row.get("priority", 0)),
                 "is_active": bool(row.get("is_active", True)),
                 "is_fallback": bool(row.get("is_fallback", False)),
