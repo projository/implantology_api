@@ -2,18 +2,13 @@
 
 import math
 import pandas as pd
-import numpy as np
-
-from sklearn.metrics.pairwise import cosine_similarity
-from app.services.embedding_service import generate_embedding
-from app.services.entity_service import extract_entities
-from app.services.flow_service import handle_multi_turn
 
 from typing import Dict, Any, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from datetime import datetime
 from io import BytesIO
+from bson.errors import InvalidId
 
 from app.services.embedding_service import generate_embedding
 from app.models.intent import Intent, IntentCreate, IntentUpdate
@@ -23,17 +18,34 @@ class IntentNotFound(Exception):
     pass
 
 
-# ───────────────── CRUD ─────────────────
+def parse_bool(value, default=True):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ["true", "1", "yes"]
+    if isinstance(value, int):
+        return value == 1
+    return default
+
 
 async def create_intent(db: AsyncIOMotorDatabase, intent_create: IntentCreate) -> Intent:
-    examples_text = " ".join(intent_create.examples)
 
-    embedding = generate_embedding(examples_text)
+    intent_name = intent_create.intent.strip()
+
+    existing = await db.intents.find_one({"intent": intent_name})
+    if existing:
+        raise ValueError("Intent already exists")
+
+    embedding = generate_embedding(" ".join(intent_create.examples))
 
     data = intent_create.dict()
+    data["intent"] = intent_name
     data["embedding"] = embedding
-    data["created_at"] = datetime.now()
-    data["updated_at"] = datetime.now()
+    data["created_at"] = datetime.utcnow()
+    data["updated_at"] = datetime.utcnow()
+    data["match_count"] = 0
+    data["positive_feedback"] = 0
+    data["negative_feedback"] = 0
 
     result = await db.intents.insert_one(data)
     data["_id"] = str(result.inserted_id)
@@ -42,46 +54,20 @@ async def create_intent(db: AsyncIOMotorDatabase, intent_create: IntentCreate) -
 
 
 async def get_intent(db: AsyncIOMotorDatabase, intent_id: str) -> Intent:
-    intent = await db.intents.find_one({"_id": ObjectId(intent_id)})
+
+    try:
+        obj_id = ObjectId(intent_id)
+    except Exception:
+        raise IntentNotFound("Invalid intent ID")
+
+    intent = await db.intents.find_one({"_id": obj_id})
+
     if not intent:
         raise IntentNotFound("Intent not found")
 
     intent["_id"] = str(intent["_id"])
     return Intent(**intent)
 
-
-async def update_intent(
-    db: AsyncIOMotorDatabase,
-    intent_id: str,
-    intent_update: IntentUpdate,
-) -> Intent:
-
-    update_data = {k: v for k, v in intent_update.dict().items() if v is not None}
-    update_data["updated_at"] = datetime.now()
-
-    result = await db.intents.update_one(
-        {"_id": ObjectId(intent_id)},
-        {"$set": update_data},
-    )
-
-    if result.modified_count != 1:
-        raise IntentNotFound("Intent not found")
-
-    return await get_intent(db, intent_id)
-
-
-async def delete_intent(db: AsyncIOMotorDatabase, intent_id: str):
-    result = await db.intents.delete_one({"_id": ObjectId(intent_id)})
-    if result.deleted_count != 1:
-        raise IntentNotFound("Intent not found")
-    return True
-
-
-async def delete_all_intents(db: AsyncIOMotorDatabase) -> int:
-    result = await db.intents.delete_many({})
-    return result.deleted_count
-
-# ───────────────── LIST WITH PAGINATION ─────────────────
 
 async def get_intents(
     db: AsyncIOMotorDatabase,
@@ -94,9 +80,7 @@ async def get_intents(
     query = {}
 
     if search_key:
-        query = {
-            "intent": {"$regex": search_key, "$options": "i"}
-        }
+        query["intent"] = {"$regex": search_key, "$options": "i"}
 
     cursor = (
         db.intents
@@ -124,101 +108,46 @@ async def get_intents(
     }
 
 
-# ───────────────── CHAT MATCHING LOGIC ─────────────────
-
-CONFIDENCE_THRESHOLD = 0.50
-
-async def generate_reply(
+async def update_intent(
     db: AsyncIOMotorDatabase,
-    message: str,
-    session_id: Optional[str] = None,
-) -> Dict[str, Any]:
+    intent_id: str,
+    intent_update: IntentUpdate,
+) -> Intent:
 
-    user_embedding = generate_embedding(message)
+    update_data = {k: v for k, v in intent_update.dict().items() if v is not None}
 
-    session = None
-    if session_id:
-        session = await db.sessions.find_one({"session_id": session_id})
+    if "examples" in update_data:
+        update_data["embedding"] = generate_embedding(
+            " ".join(update_data["examples"])
+        )
 
-    intents = await db.intents.find({"is_active": True}).to_list(None)
+    update_data["updated_at"] = datetime.utcnow()
 
-    best_intent = None
-    best_score = 0
+    result = await db.intents.update_one(
+        {"_id": ObjectId(intent_id)},
+        {"$set": update_data},
+    )
 
-    for intent in intents:
+    if result.matched_count != 1:
+        raise IntentNotFound("Intent not found")
 
-        if not intent.get("embedding"):
-            continue
+    return await get_intent(db, intent_id)
 
-        score = cosine_similarity(
-            [user_embedding],
-            [intent["embedding"]]
-        )[0][0]
 
-        # feedback boost
-        pos = intent.get("positive_feedback", 0)
-        neg = intent.get("negative_feedback", 0)
+async def delete_intent(db: AsyncIOMotorDatabase, intent_id: str):
 
-        if pos + neg > 0:
-            score += (pos / (pos + neg)) * 0.1
+    result = await db.intents.delete_one({"_id": ObjectId(intent_id)})
 
-        if score > best_score:
-            best_score = score
-            best_intent = intent
+    if result.deleted_count != 1:
+        raise IntentNotFound("Intent not found")
 
-    confidence = round(float(best_score), 3)
+    return True
 
-    if best_intent and confidence >= CONFIDENCE_THRESHOLD:
 
-        entities = extract_entities(message)
+async def delete_all_intents(db: AsyncIOMotorDatabase) -> int:
 
-        # update session
-        if session_id:
-            await db.sessions.update_one(
-                {"session_id": session_id},
-                {
-                    "$set": {
-                        "last_intent": best_intent["intent"],
-                        "updated_at": datetime.now()
-                    },
-                    "$setOnInsert": {
-                        "created_at": datetime.now(),
-                        "collected_entities": {}
-                    }
-                },
-                upsert=True
-            )
-
-        # multi-turn
-        if session:
-            session["collected_entities"].update(entities)
-            next_question = handle_multi_turn(best_intent, session)
-            if next_question:
-                return {
-                    "message": next_question,
-                    "intent": best_intent["intent"],
-                    "confidence": confidence,
-                    "entities": session["collected_entities"],
-                    "fallback": False
-                }
-
-        reply = np.random.choice(best_intent.get("responses", ["Okay."]))
-
-        return {
-            "message": reply,
-            "intent": best_intent["intent"],
-            "confidence": confidence,
-            "entities": entities,
-            "fallback": False,
-        }
-
-    return {
-        "message": "I'm not sure I understood that. Could you rephrase?",
-        "intent": None,
-        "confidence": confidence,
-        "entities": None,
-        "fallback": True,
-    }
+    result = await db.intents.delete_many({})
+    return result.deleted_count
 
 
 async def upload_intents(
@@ -228,52 +157,48 @@ async def upload_intents(
 
     df = pd.read_excel(BytesIO(file_bytes))
 
+    if "intent" not in df.columns:
+        raise ValueError("Excel must contain 'intent' column")
+
     inserted = []
     errors = []
 
     for index, row in df.iterrows():
         try:
-            # ─── Parse examples ───
-            examples = []
-            if pd.notna(row.get("examples")):
-                examples = [
-                    e.strip()
-                    for e in str(row["examples"]).split("|")
-                    if e.strip()
-                ]
 
-            # ─── Parse responses ───
-            responses = []
-            if pd.notna(row.get("responses")):
-                responses = [
-                    r.strip()
-                    for r in str(row["responses"]).split("|")
-                    if r.strip()
-                ]
+            intent_name = str(row["intent"]).strip()
+            if not intent_name:
+                continue
 
-            # ─── Build Intent Document ───
+            examples = str(row.get("examples", "")).split("|")
+            responses = str(row.get("responses", "")).split("|")
+
+            examples = [e.strip() for e in examples if e.strip()]
+            responses = [r.strip() for r in responses if r.strip()]
+
+            embedding = generate_embedding(" ".join(examples))
+
             intent_data = {
-                "intent": row["intent"],
+                "intent": intent_name,
                 "examples": examples,
-                "response": responses,
+                "responses": responses,
+                "embedding": embedding,
                 "priority": int(row.get("priority", 0)),
-                "is_active": bool(row.get("is_active", True)),
-                "is_fallback": bool(row.get("is_fallback", False)),
-                "created_at": datetime.now(),
-                "updated_at": datetime.now(),
+                "is_active": parse_bool(row.get("is_active", True)),
+                "is_fallback": parse_bool(row.get("is_fallback", False), False),
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
                 "match_count": 0,
                 "positive_feedback": 0,
                 "negative_feedback": 0,
-                "user_weights": {}
             }
 
-            # Optional: Prevent duplicate intent names
-            existing = await db.intents.find_one({"intent": intent_data["intent"]})
+            existing = await db.intents.find_one({"intent": intent_name})
             if existing:
                 continue
 
             await db.intents.insert_one(intent_data)
-            inserted.append(intent_data["intent"])
+            inserted.append(intent_name)
 
         except Exception as e:
             errors.append({
