@@ -2,16 +2,19 @@
 
 import math
 import pandas as pd
+import numpy as np
 
 from typing import Dict, Any, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from datetime import datetime
 from io import BytesIO
-from bson.errors import InvalidId
+from sklearn.metrics.pairwise import cosine_similarity
 
-from app.services.embedding_service import generate_embedding
+
+from app.core.config import settings
 from app.models.intent import Intent, IntentCreate, IntentUpdate
+from app.services.engine_service import fuzzy_score, generate_embedding, get_recent_context, normalize_vector
 
 
 class IntentNotFound(Exception):
@@ -36,11 +39,14 @@ async def create_intent(db: AsyncIOMotorDatabase, intent_create: IntentCreate) -
     if existing:
         raise ValueError("Intent already exists")
 
-    embedding = generate_embedding(" ".join(intent_create.requests))
+    request_embeddings = [
+        generate_embedding(request)
+        for request in intent_create.requests
+    ]
 
     data = intent_create.dict()
     data["intent"] = intent_name
-    data["embedding"] = embedding
+    data["request_embeddings"] = request_embeddings
     data["created_at"] = datetime.utcnow()
     data["updated_at"] = datetime.utcnow()
     data["match_count"] = 0
@@ -117,9 +123,10 @@ async def update_intent(
     update_data = {k: v for k, v in intent_update.dict().items() if v is not None}
 
     if "requests" in update_data:
-        update_data["embedding"] = generate_embedding(
-            " ".join(update_data["requests"])
-        )
+        update_data["request_embeddings"] = [
+            generate_embedding(request)
+            for request in update_data["requests"]
+        ]
 
     update_data["updated_at"] = datetime.utcnow()
 
@@ -176,13 +183,16 @@ async def upload_intents(
             requests = [e.strip() for e in requests if e.strip()]
             responses = [r.strip() for r in responses if r.strip()]
 
-            embedding = generate_embedding(" ".join(requests))
+            request_embeddings = [
+                generate_embedding(request)
+                for request in requests
+            ]
 
             intent_data = {
                 "intent": intent_name,
                 "requests": requests,
                 "responses": responses,
-                "embedding": embedding,
+                "request_embeddings": request_embeddings,
                 "priority": int(row.get("priority", 0)),
                 "is_active": parse_bool(row.get("is_active", True)),
                 "is_fallback": parse_bool(row.get("is_fallback", False), False),
@@ -210,4 +220,109 @@ async def upload_intents(
         "inserted_count": len(inserted),
         "inserted_intents": inserted,
         "errors": errors
+    }
+
+
+async def generate_reply(
+    db,
+    message: str,
+    chat_id: str
+) -> Dict[str, Any]:
+
+    message_clean = message.lower().strip()
+
+    # ─────────────────────────────
+    # 1️⃣ EXACT MATCH (FAST PATH)
+    # ─────────────────────────────
+    rule_intent = await db.intents.find_one({
+        "is_active": True,
+        "requests": {"$in": [message_clean]}
+    })
+
+    if rule_intent:
+        reply = np.random.choice(rule_intent["responses"])
+        return {
+            "message": reply,
+            "intent_id": str(rule_intent["_id"]),
+            "confidence": 0.99,
+            "decision": "bot"
+        }
+
+    # ─────────────────────────────
+    # 2️⃣ FUZZY MATCH (TYPO SAFE)
+    # ─────────────────────────────
+    intents = await db.intents.find({"is_active": True}).to_list(None)
+
+    best_fuzzy_score = 0
+    best_fuzzy_intent = None
+
+    for intent in intents:
+        for ex in intent.get("requests", []):
+            score = fuzzy_score(message_clean, ex)
+            if score > best_fuzzy_score:
+                best_fuzzy_score = score
+                best_fuzzy_intent = intent
+
+    if best_fuzzy_intent and best_fuzzy_score >= settings.FUZZY_THRESHOLD:
+        reply = np.random.choice(best_fuzzy_intent["responses"])
+        return {
+            "message": reply,
+            "intent_id": str(best_fuzzy_intent["_id"]),
+            "confidence": round(best_fuzzy_score, 3),
+            "decision": "bot"
+        }
+
+    # ─────────────────────────────
+    # 3️⃣ CONTEXT-AWARE EMBEDDING MATCH
+    # ─────────────────────────────
+    context_text = await get_recent_context(db, chat_id)
+    combined_input = f"{context_text} {message}".strip()
+
+    user_embedding = normalize_vector(generate_embedding(combined_input))
+
+    best_score = 0
+    best_intent = None
+
+    for intent in intents:
+        for ex_embedding in intent.get("request_embeddings", []):
+            similarity = cosine_similarity(
+                [user_embedding],
+                [normalize_vector(ex_embedding)]
+            )[0][0]
+
+            # context boost
+            if context_text:
+                similarity += settings.CONTEXT_BOOST
+
+            if similarity > best_score:
+                best_score = similarity
+                best_intent = intent
+
+    confidence = round(float(best_score), 3)
+
+    # ─────────────────────────────
+    # DECISION LOGIC
+    # ─────────────────────────────
+    if best_intent and confidence >= settings.CONFIDENCE_HIGH:
+        reply = np.random.choice(best_intent["responses"])
+        return {
+            "message": reply,
+            "intent_id": str(best_intent["_id"]),
+            "confidence": confidence,
+            "decision": "bot"
+        }
+
+    if best_intent and confidence >= settings.CONFIDENCE_LOW:
+        return {
+            "message": f"Did you mean '{best_intent['intent']}'?",
+            "intent_id": str(best_intent["_id"]),
+            "confidence": confidence,
+            "decision": "clarification"
+        }
+
+    return {
+        "message": "Your message has been forwarded to a human agent.",
+        "intent_id": None,
+        "confidence": confidence,
+        "decision": "escalate"
     }

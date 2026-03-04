@@ -11,8 +11,8 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from starlette.middleware.cors import CORSMiddleware
 
+from app.services.engine_service import load_model
 from app.core.config import settings
-from app.services.embedding_service import load_model
 from app.utils.database import (
     connect_to_mongo,
     close_mongo_connection,
@@ -38,6 +38,8 @@ from app.routes.payment_routes import router as payment_router
 from app.routes.enrollment_routes import router as enrollment_router
 from app.routes.faq_routes import router as faq_router
 from app.routes.intent_routes import router as intent_router
+from app.routes.chat_routes import router as chat_router
+from app.routes.conversation_routes import router as conversation_router
 
 
 # ---------------------------------------------------
@@ -157,3 +159,5 @@ app.include_router(payment_router, prefix="/payments", tags=["Payment"])
 app.include_router(enrollment_router, prefix="/enrollments", tags=["Enrollment"])
 app.include_router(faq_router, prefix="/faqs", tags=["FAQ"])
 app.include_router(intent_router, prefix="/intents", tags=["Intent"])
+app.include_router(chat_router, prefix="/chats", tags=["Chat"])
+app.include_router(conversation_router, prefix="/conversations", tags=["Conversation"])

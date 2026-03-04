@@ -56,13 +56,17 @@ async def create_indexes():
 
     logger.info("Creating MongoDB indexes...")
 
-    # Property Categories
     await db.property_categories.create_index("name", unique=True)
 
-    # Intent indexes
     await db.intents.create_index("intent", unique=True)
     await db.intents.create_index("created_at")
     await db.intents.create_index("priority")
     await db.intents.create_index("is_active")
+
+    await db.chats.create_index("user_id")
+    await db.chats.create_index("status")
+    
+    await db.conversations.create_index("chat_id")
+    await db.conversations.create_index("created_at")
 
     logger.info("Indexes ensured successfully.")

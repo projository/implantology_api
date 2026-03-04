@@ -13,7 +13,8 @@ class Intent(BaseModel):
     requests: List[str] = Field(default_factory=list)
     responses: List[str] = Field(default_factory=list)
 
-    embedding: Optional[List[float]] = None
+    # 🔥 NEW: One embedding per request
+    request_embeddings: List[List[float]] = Field(default_factory=list)
 
     priority: int = 0
     is_active: bool = True
