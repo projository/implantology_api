@@ -36,7 +36,7 @@ async def create_intent(db: AsyncIOMotorDatabase, intent_create: IntentCreate) -
     if existing:
         raise ValueError("Intent already exists")
 
-    embedding = generate_embedding(" ".join(intent_create.examples))
+    embedding = generate_embedding(" ".join(intent_create.requests))
 
     data = intent_create.dict()
     data["intent"] = intent_name
@@ -116,9 +116,9 @@ async def update_intent(
 
     update_data = {k: v for k, v in intent_update.dict().items() if v is not None}
 
-    if "examples" in update_data:
+    if "requests" in update_data:
         update_data["embedding"] = generate_embedding(
-            " ".join(update_data["examples"])
+            " ".join(update_data["requests"])
         )
 
     update_data["updated_at"] = datetime.utcnow()
@@ -170,17 +170,17 @@ async def upload_intents(
             if not intent_name:
                 continue
 
-            examples = str(row.get("examples", "")).split("|")
+            requests = str(row.get("requests", "")).split("|")
             responses = str(row.get("responses", "")).split("|")
 
-            examples = [e.strip() for e in examples if e.strip()]
+            requests = [e.strip() for e in requests if e.strip()]
             responses = [r.strip() for r in responses if r.strip()]
 
-            embedding = generate_embedding(" ".join(examples))
+            embedding = generate_embedding(" ".join(requests))
 
             intent_data = {
                 "intent": intent_name,
-                "examples": examples,
+                "requests": requests,
                 "responses": responses,
                 "embedding": embedding,
                 "priority": int(row.get("priority", 0)),

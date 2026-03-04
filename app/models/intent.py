@@ -10,7 +10,7 @@ class Intent(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
 
     intent: str
-    examples: List[str] = Field(default_factory=list)
+    requests: List[str] = Field(default_factory=list)
     responses: List[str] = Field(default_factory=list)
 
     embedding: Optional[List[float]] = None
@@ -36,7 +36,7 @@ class Intent(BaseModel):
 
 class IntentCreate(BaseModel):
     intent: str
-    examples: List[str] = Field(default_factory=list)
+    requests: List[str] = Field(default_factory=list)
     responses: List[str] = Field(default_factory=list)
     priority: int = 0
     is_active: bool = True
@@ -44,7 +44,7 @@ class IntentCreate(BaseModel):
 
 class IntentUpdate(BaseModel):
     intent: Optional[str] = None
-    examples: Optional[List[str]] = None
+    requests: Optional[List[str]] = None
     responses: Optional[List[str]] = None
     priority: Optional[int] = None
     is_active: Optional[bool] = None
