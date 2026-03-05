@@ -7,7 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 
 from app.crud.intent_crud import generate_reply
-from app.models.conversation import Conversation, ConversationCreate
+from app.models.conversation import Conversation, ConversationCreate, ConversationUpdate
 from app.crud.conversation_crud import create_conversation, list_conversations, save_conversation
 from app.crud.chat_crud import create_chat, get_chat
 from app.models.chat import ChatCreate
@@ -107,26 +107,25 @@ async def send_message(
 
 @router.post("/reply")
 async def replay_conversation(
-    chat_id: str,
+    conversation_data: ConversationUpdate,
     admin_id: str,
-    message: str,
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
-    chat = await get_chat(db, chat_id)
+    chat = await get_chat(db, conversation_data.chat_id)
 
     if chat.status not in ["pending_admin", "open"]:
         raise HTTPException(status_code=400, detail="Chat not active")
 
     admin_msg = await save_conversation(
         db=db,
-        chat_id=chat_id,
+        chat_id=conversation_data.chat_id,
         sender_type="admin",
-        content=message,
+        content=conversation_data.message,
         sender_id=admin_id,
     )
 
     await db.chats.update_one(
-        {"_id": ObjectId(chat_id)},
+        {"_id": ObjectId(conversation_data.chat_id)},
         {
             "$set": {
                 "status": "open",

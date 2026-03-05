@@ -38,3 +38,8 @@ class Conversation(BaseModel):
 class ConversationCreate(BaseModel):
     message: str
     chat_id: Optional[str] = None
+
+
+class ConversationUpdate(BaseModel):
+    message: str
+    chat_id: Optional[str] = None
