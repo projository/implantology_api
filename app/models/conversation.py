@@ -21,6 +21,8 @@ class Conversation(BaseModel):
     message_type: MessageType = "text"
     content: str
 
+    embedding: Optional[list[float]] = None
+
     intent_id: Optional[str] = None
     confidence_score: Optional[float] = None
     is_fallback: bool = False

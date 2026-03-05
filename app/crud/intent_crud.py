@@ -2,19 +2,18 @@
 
 import math
 import pandas as pd
-import numpy as np
+import random
 
+from bson import ObjectId
+from datetime import datetime
 from typing import Dict, Any, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from datetime import datetime
 from io import BytesIO
-from sklearn.metrics.pairwise import cosine_similarity
 
-
-from app.core.config import settings
 from app.models.intent import Intent, IntentCreate, IntentUpdate
-from app.services.engine_service import fuzzy_score, generate_embedding, get_recent_context, normalize_vector
+from app.services.engine_service import generate_embedding, score_intent
 
 
 class IntentNotFound(Exception):
@@ -223,106 +222,88 @@ async def upload_intents(
     }
 
 
-async def generate_reply(
-    db,
-    message: str,
-    chat_id: str
-) -> Dict[str, Any]:
+async def generate_reply(db, message: str, chat_id: str):
 
     message_clean = message.lower().strip()
 
-    # ─────────────────────────────
-    # 1️⃣ EXACT MATCH (FAST PATH)
-    # ─────────────────────────────
-    rule_intent = await db.intents.find_one({
-        "is_active": True,
-        "requests": {"$in": [message_clean]}
-    })
-
-    if rule_intent:
-        reply = np.random.choice(rule_intent["responses"])
-        return {
-            "message": reply,
-            "intent_id": str(rule_intent["_id"]),
-            "confidence": 0.99,
-            "decision": "bot"
-        }
-
-    # ─────────────────────────────
-    # 2️⃣ FUZZY MATCH (TYPO SAFE)
-    # ─────────────────────────────
+    chat = await db.chats.find_one({"_id": ObjectId(chat_id)})
     intents = await db.intents.find({"is_active": True}).to_list(None)
 
-    best_fuzzy_score = 0
-    best_fuzzy_intent = None
+    user_embedding = generate_embedding(message_clean)
 
-    for intent in intents:
-        for ex in intent.get("requests", []):
-            score = fuzzy_score(message_clean, ex)
-            if score > best_fuzzy_score:
-                best_fuzzy_score = score
-                best_fuzzy_intent = intent
-
-    if best_fuzzy_intent and best_fuzzy_score >= settings.FUZZY_THRESHOLD:
-        reply = np.random.choice(best_fuzzy_intent["responses"])
-        return {
-            "message": reply,
-            "intent_id": str(best_fuzzy_intent["_id"]),
-            "confidence": round(best_fuzzy_score, 3),
-            "decision": "bot"
-        }
-
-    # ─────────────────────────────
-    # 3️⃣ CONTEXT-AWARE EMBEDDING MATCH
-    # ─────────────────────────────
-    context_text = await get_recent_context(db, chat_id)
-    combined_input = f"{context_text} {message}".strip()
-
-    user_embedding = normalize_vector(generate_embedding(combined_input))
-
-    best_score = 0
     best_intent = None
+    best_score = 0.0
+
+    # ─────────────────────────────
+    # 🔥 CONTEXT CONTINUATION LOGIC
+    # ─────────────────────────────
+    short_message = len(message_clean.split()) <= 3
 
     for intent in intents:
-        for ex_embedding in intent.get("request_embeddings", []):
-            similarity = cosine_similarity(
-                [user_embedding],
-                [normalize_vector(ex_embedding)]
-            )[0][0]
 
-            # context boost
-            if context_text:
-                similarity += settings.CONTEXT_BOOST
+        # If short reply like "yes", focus on last intent
+        if short_message and chat.get("current_intent_id"):
+            if str(intent["_id"]) != chat["current_intent_id"]:
+                continue
 
-            if similarity > best_score:
-                best_score = similarity
-                best_intent = intent
+        score = score_intent(user_embedding, message_clean, intent)
 
-    confidence = round(float(best_score), 3)
+        if score > best_score:
+            best_score = score
+            best_intent = intent
+
+    confidence = round(best_score, 3)
 
     # ─────────────────────────────
-    # DECISION LOGIC
+    # DECISION ENGINE
     # ─────────────────────────────
-    if best_intent and confidence >= settings.CONFIDENCE_HIGH:
-        reply = np.random.choice(best_intent["responses"])
+    if best_intent and confidence >= 0.75:
+
+        await db.chats.update_one(
+            {"_id": ObjectId(chat_id)},
+            {
+                "$set": {
+                    "current_intent_id": str(best_intent["_id"]),
+                    "failure_count": 0,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+
         return {
-            "message": reply,
+            "message": random.choice(best_intent["responses"]),
             "intent_id": str(best_intent["_id"]),
             "confidence": confidence,
             "decision": "bot"
         }
 
-    if best_intent and confidence >= settings.CONFIDENCE_LOW:
+    if best_intent and confidence >= 0.5:
         return {
-            "message": f"Did you mean '{best_intent['intent']}'?",
+            "message": f"I think you're asking about '{best_intent['intent']}'. Can you confirm?",
             "intent_id": str(best_intent["_id"]),
             "confidence": confidence,
             "decision": "clarification"
         }
 
+    # 🔥 Escalation after repeated failure
+    failure_count = chat.get("failure_count", 0) + 1
+
+    await db.chats.update_one(
+        {"_id": ObjectId(chat_id)},
+        {"$set": {"failure_count": failure_count}}
+    )
+
+    if failure_count >= 2:
+        return {
+            "message": "I'm transferring you to a human support agent.",
+            "intent_id": None,
+            "confidence": confidence,
+            "decision": "escalate"
+        }
+
     return {
-        "message": "Your message has been forwarded to a human agent.",
+        "message": "I'm not sure I understood. Could you please rephrase?",
         "intent_id": None,
         "confidence": confidence,
-        "decision": "escalate"
+        "decision": "clarification"
     }

@@ -6,6 +6,7 @@ from bson import ObjectId
 from typing import Optional
 
 from app.models.conversation import Conversation
+from app.services.engine_service import generate_embedding
 
 
 async def create_conversation(
@@ -21,11 +22,14 @@ async def create_conversation(
 
     now = datetime.utcnow()
 
+    embedding = generate_embedding(content)
+
     data = {
         "chat_id": ObjectId(chat_id),
         "sender_type": sender_type,
         "sender_id": sender_id,
         "content": content,
+        "embedding": embedding,
         "intent_id": intent_id,
         "confidence_score": confidence_score,
         "is_fallback": is_fallback,
@@ -82,11 +86,14 @@ async def save_conversation(
 
     now = datetime.utcnow()
 
+    embedding = generate_embedding(content)
+
     data = {
         "chat_id": ObjectId(chat_id),
         "sender_type": sender_type,
         "sender_id": sender_id,
         "content": content,
+        "embedding": embedding,
         "intent_id": intent_id,
         "confidence_score": confidence_score,
         "is_fallback": is_fallback,

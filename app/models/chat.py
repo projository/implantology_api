@@ -29,6 +29,9 @@ class Chat(BaseModel):
 
     is_bot_enabled: bool = True
 
+    failure_count: int = 0
+    current_intent_id: Optional[str] = None
+
     created_at: datetime
     updated_at: datetime
 
