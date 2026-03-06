@@ -7,7 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 
 from app.crud.intent_crud import generate_reply
-from app.models.conversation import Conversation, ConversationCreate, ConversationUpdate
+from app.models.conversation import ResponseConversation, ConversationCreate, ConversationUpdate
 from app.crud.conversation_crud import create_conversation, list_conversations, save_conversation
 from app.crud.chat_crud import create_chat, get_chat
 from app.models.chat import ChatCreate
@@ -73,7 +73,26 @@ async def send_message(
 
     decision = reply_data["decision"]
 
-    if decision in ["bot", "clarification"]:
+    # if decision in ["bot", "clarification"]:
+
+    #     bot_msg = await save_conversation(
+    #         db=db,
+    #         chat_id=chat_id,
+    #         sender_type="bot",
+    #         content=reply_data["message"],
+    #         intent_id=reply_data["intent_id"],
+    #         confidence_score=reply_data["confidence"],
+    #     )
+
+    #     return {
+    #         "chat_id": chat_id,
+    #         "status": decision,
+    #         "confidence": reply_data["confidence"],
+    #         "bot_message": bot_msg,
+    #     }
+    
+    # Bot confident reply → save conversation
+    if decision == "bot":
 
         bot_msg = await save_conversation(
             db=db,
@@ -86,9 +105,20 @@ async def send_message(
 
         return {
             "chat_id": chat_id,
-            "status": decision,
+            "status": "bot",
             "confidence": reply_data["confidence"],
             "bot_message": bot_msg,
+        }
+
+
+    # Clarification → DO NOT SAVE
+    if decision == "clarification":
+
+        return {
+            "chat_id": chat_id,
+            "status": "clarification",
+            "confidence": reply_data["confidence"],
+            "message": reply_data["message"]
         }
 
     # Escalate
@@ -142,7 +172,7 @@ async def replay_conversation(
     }
 
 
-@router.get("/{chat_id}", response_model=list[Conversation])
+@router.get("/{chat_id}", response_model=list[ResponseConversation])
 async def get_conversations(
     chat_id: str,
     db: AsyncIOMotorDatabase = Depends(get_db),

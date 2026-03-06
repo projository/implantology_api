@@ -35,6 +35,22 @@ class Intent(BaseModel):
         json_encoders = {PydanticObjectId: str}
 
 
+class ResponseIntent(BaseModel):
+    id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
+
+    intent: str
+    requests: List[str] = Field(default_factory=list)
+    responses: List[str] = Field(default_factory=list)
+
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {PydanticObjectId: str}
+
+
 class IntentCreate(BaseModel):
     intent: str
     requests: List[str] = Field(default_factory=list)

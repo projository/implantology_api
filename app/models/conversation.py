@@ -35,7 +35,26 @@ class Conversation(BaseModel):
         populate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {PydanticObjectId: str}
-        
+
+
+class ResponseConversation(BaseModel):
+    id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
+
+    chat_id: PydanticObjectId
+
+    sender_type: SenderType
+    sender_id: Optional[str] = None
+
+    message_type: MessageType = "text"
+    content: str
+
+    created_at: datetime
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {PydanticObjectId: str}
+
 
 class ConversationCreate(BaseModel):
     message: str

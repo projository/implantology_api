@@ -5,6 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.models.intent import (
     Intent,
+    ResponseIntent,
     IntentCreate,
     IntentUpdate,
 )
@@ -59,7 +60,7 @@ async def remove_all_intents(
     }
 
 
-@router.get("", response_model=PaginatedResponse[Intent])
+@router.get("", response_model=PaginatedResponse[ResponseIntent])
 async def list_intents(
     keyword: str = Query(None),
     page: int = Query(1, ge=1),
