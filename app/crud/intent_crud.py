@@ -1,36 +1,56 @@
 # app/crud/intent_crud.py
 
 import math
-import re
-import random
 import pandas as pd
+import random
 
-from rapidfuzz import fuzz
-
+from bson import ObjectId
+from datetime import datetime
 from typing import Dict, Any, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from datetime import datetime
-from collections import Counter
 from io import BytesIO
 
 from app.models.intent import Intent, IntentCreate, IntentUpdate
+from app.services.engine_service import generate_embedding, score_intent
 
 
 class IntentNotFound(Exception):
     pass
 
 
-# ───────────────── CRUD ─────────────────
+def parse_bool(value, default=True):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.lower() in ["true", "1", "yes"]
+    if isinstance(value, int):
+        return value == 1
+    return default
+
 
 async def create_intent(db: AsyncIOMotorDatabase, intent_create: IntentCreate) -> Intent:
+
+    intent_name = intent_create.intent.strip()
+
+    existing = await db.intents.find_one({"intent": intent_name})
+    if existing:
+        raise ValueError("Intent already exists")
+
+    request_embeddings = [
+        generate_embedding(request)
+        for request in intent_create.requests
+    ]
+
     data = intent_create.dict()
-    data["created_at"] = datetime.now()
-    data["updated_at"] = datetime.now()
+    data["intent"] = intent_name
+    data["request_embeddings"] = request_embeddings
+    data["created_at"] = datetime.utcnow()
+    data["updated_at"] = datetime.utcnow()
     data["match_count"] = 0
     data["positive_feedback"] = 0
     data["negative_feedback"] = 0
-    data["user_weights"] = {}
 
     result = await db.intents.insert_one(data)
     data["_id"] = str(result.inserted_id)
@@ -39,46 +59,20 @@ async def create_intent(db: AsyncIOMotorDatabase, intent_create: IntentCreate) -
 
 
 async def get_intent(db: AsyncIOMotorDatabase, intent_id: str) -> Intent:
-    intent = await db.intents.find_one({"_id": ObjectId(intent_id)})
+
+    try:
+        obj_id = ObjectId(intent_id)
+    except Exception:
+        raise IntentNotFound("Invalid intent ID")
+
+    intent = await db.intents.find_one({"_id": obj_id})
+
     if not intent:
         raise IntentNotFound("Intent not found")
 
     intent["_id"] = str(intent["_id"])
     return Intent(**intent)
 
-
-async def update_intent(
-    db: AsyncIOMotorDatabase,
-    intent_id: str,
-    intent_update: IntentUpdate,
-) -> Intent:
-
-    update_data = {k: v for k, v in intent_update.dict().items() if v is not None}
-    update_data["updated_at"] = datetime.now()
-
-    result = await db.intents.update_one(
-        {"_id": ObjectId(intent_id)},
-        {"$set": update_data},
-    )
-
-    if result.modified_count != 1:
-        raise IntentNotFound("Intent not found")
-
-    return await get_intent(db, intent_id)
-
-
-async def delete_intent(db: AsyncIOMotorDatabase, intent_id: str):
-    result = await db.intents.delete_one({"_id": ObjectId(intent_id)})
-    if result.deleted_count != 1:
-        raise IntentNotFound("Intent not found")
-    return True
-
-
-async def delete_all_intents(db: AsyncIOMotorDatabase) -> int:
-    result = await db.intents.delete_many({})
-    return result.deleted_count
-
-# ───────────────── LIST WITH PAGINATION ─────────────────
 
 async def get_intents(
     db: AsyncIOMotorDatabase,
@@ -91,9 +85,7 @@ async def get_intents(
     query = {}
 
     if search_key:
-        query = {
-            "intent": {"$regex": search_key, "$options": "i"}
-        }
+        query["intent"] = {"$regex": search_key, "$options": "i"}
 
     cursor = (
         db.intents
@@ -121,163 +113,47 @@ async def get_intents(
     }
 
 
-# ───────────────── CHAT MATCHING LOGIC ─────────────────
-
-STOPWORDS = {"the", "a", "an"}
-CONFIDENCE_THRESHOLD = 0.45
-
-def _normalize(text: str):
-    text = text.lower().strip()
-    return re.sub(r"[^\w\s]", "", text)
-
-
-def _tokenize(text: str):
-    return [w for w in text.split() if w not in STOPWORDS]
-
-
-def _cosine_similarity(a: Counter, b: Counter):
-    intersection = set(a.keys()) & set(b.keys())
-    dot = sum(a[x] * b[x] for x in intersection)
-
-    norm_a = math.sqrt(sum(v * v for v in a.values()))
-    norm_b = math.sqrt(sum(v * v for v in b.values()))
-
-    if not norm_a or not norm_b:
-        return 0.0
-
-    return dot / (norm_a * norm_b)
-
-
-async def generate_reply(
+async def update_intent(
     db: AsyncIOMotorDatabase,
-    message: str,
-    session_id: Optional[str] = None,
-) -> Dict[str, Any]:
+    intent_id: str,
+    intent_update: IntentUpdate,
+) -> Intent:
 
-    normalized = _normalize(message)
-    words = _tokenize(normalized)
-    message_vector = Counter(words)
+    update_data = {k: v for k, v in intent_update.dict().items() if v is not None}
 
-    session = None
-    if session_id:
-        session = await db.sessions.find_one({"session_id": session_id})
+    if "requests" in update_data:
+        update_data["request_embeddings"] = [
+            generate_embedding(request)
+            for request in update_data["requests"]
+        ]
 
-    intents = await db.intents.find({"is_active": True}).to_list(None)
+    update_data["updated_at"] = datetime.utcnow()
 
-    best_intent = None
-    best_score = 0.0
+    result = await db.intents.update_one(
+        {"_id": ObjectId(intent_id)},
+        {"$set": update_data},
+    )
 
-    for intent in intents:
+    if result.matched_count != 1:
+        raise IntentNotFound("Intent not found")
 
-        examples_text = " ".join(
-            intent.get("examples", []) + [intent["intent"]]
-        )
+    return await get_intent(db, intent_id)
 
-        intent_words = _tokenize(_normalize(examples_text))
-        intent_vector = Counter(intent_words)
 
-        # 1️⃣ Cosine Similarity
-        cosine = _cosine_similarity(message_vector, intent_vector)
+async def delete_intent(db: AsyncIOMotorDatabase, intent_id: str):
 
-        # 2️⃣ Fuzzy Matching
-        fuzzy_score = fuzz.partial_ratio(
-            normalized,
-            _normalize(examples_text)
-        ) / 100
+    result = await db.intents.delete_one({"_id": ObjectId(intent_id)})
 
-        # 3️⃣ Keyword Weighted Score (Normalized)
-        keyword_score = 0
-        total_weight = 0
+    if result.deleted_count != 1:
+        raise IntentNotFound("Intent not found")
 
-        for kw in intent.get("keywords", []):
-            total_weight += kw.get("weight", 1)
-            if kw["word"].lower() in words:
-                keyword_score += kw.get("weight", 1)
+    return True
 
-        if total_weight > 0:
-            keyword_score = keyword_score / total_weight
-        else:
-            keyword_score = 0
 
-        # 4️⃣ Feedback Learning Boost
-        positive = intent.get("positive_feedback", 0)
-        negative = intent.get("negative_feedback", 0)
+async def delete_all_intents(db: AsyncIOMotorDatabase) -> int:
 
-        feedback_score = 0
-        if positive + negative > 0:
-            feedback_score = positive / (positive + negative)
-
-        # 5️⃣ Priority Normalized
-        priority = intent.get("priority", 0)
-        priority_score = min(priority / 10, 1)
-
-        # 🔥 Final Weighted Score (0–1 range)
-        score = (
-            cosine * 0.35 +
-            fuzzy_score * 0.30 +
-            keyword_score * 0.20 +
-            feedback_score * 0.10 +
-            priority_score * 0.05
-        )
-
-        # Context Boost
-        if session and len(words) <= 2:
-            if session.get("last_intent") == intent["intent"]:
-                score += 0.1
-
-        if score > best_score:
-            best_score = score
-            best_intent = intent
-
-    confidence = round(best_score, 3)
-
-    if best_intent and confidence >= CONFIDENCE_THRESHOLD:
-
-        responses = best_intent.get("responses", [])
-        reply = random.choice(responses) if responses else "Okay."
-
-        await db.intents.update_one(
-            {"_id": best_intent["_id"]},
-            {
-                "$inc": {"match_count": 1},
-                "$set": {"last_matched": datetime.now()},
-            },
-        )
-
-        if session_id:
-            await db.sessions.update_one(
-                {"session_id": session_id},
-                {
-                    "$set": {
-                        "last_intent": best_intent["intent"],
-                        "last_message": message,
-                        "updated_at": datetime.now(),
-                    },
-                    "$setOnInsert": {
-                        "created_at": datetime.now(),
-                        "context": {},
-                    },
-                },
-                upsert=True,
-            )
-
-        return {
-            "message": reply,
-            "intent": best_intent["intent"],
-            "confidence": confidence,
-            "fallback": False,
-        }
-
-    return {
-        "message": random.choice([
-            "Hmm 🤔 I didn’t quite understand that.",
-            "Could you rephrase that?",
-            "I'm not sure I understood. Can you try again?"
-        ]),
-        "intent": None,
-        "confidence": confidence,
-        "fallback": True,
-    }
+    result = await db.intents.delete_many({})
+    return result.deleted_count
 
 
 async def upload_intents(
@@ -287,64 +163,51 @@ async def upload_intents(
 
     df = pd.read_excel(BytesIO(file_bytes))
 
+    if "intent" not in df.columns:
+        raise ValueError("Excel must contain 'intent' column")
+
     inserted = []
     errors = []
 
     for index, row in df.iterrows():
         try:
-            # ─── Parse examples ───
-            examples = []
-            if pd.notna(row.get("examples")):
-                examples = [
-                    e.strip()
-                    for e in str(row["examples"]).split("|")
-                    if e.strip()
-                ]
 
-            # ─── Parse keywords ───
-            keywords = []
-            if pd.notna(row.get("keywords")):
-                for item in str(row["keywords"]).split("|"):
-                    if ":" in item:
-                        word, weight = item.split(":")
-                        keywords.append({
-                            "word": word.strip(),
-                            "weight": int(weight.strip())
-                        })
+            intent_name = str(row["intent"]).strip()
+            if not intent_name:
+                continue
 
-            # ─── Parse responses ───
-            responses = []
-            if pd.notna(row.get("responses")):
-                responses = [
-                    r.strip()
-                    for r in str(row["responses"]).split("|")
-                    if r.strip()
-                ]
+            requests = str(row.get("requests", "")).split("|")
+            responses = str(row.get("responses", "")).split("|")
 
-            # ─── Build Intent Document ───
+            requests = [e.strip() for e in requests if e.strip()]
+            responses = [r.strip() for r in responses if r.strip()]
+
+            request_embeddings = [
+                generate_embedding(request)
+                for request in requests
+            ]
+
             intent_data = {
-                "intent": row["intent"],
-                "examples": examples,
-                "keywords": keywords,
-                "response": responses,
+                "intent": intent_name,
+                "requests": requests,
+                "responses": responses,
+                "request_embeddings": request_embeddings,
                 "priority": int(row.get("priority", 0)),
-                "is_active": bool(row.get("is_active", True)),
-                "is_fallback": bool(row.get("is_fallback", False)),
-                "created_at": datetime.now(),
-                "updated_at": datetime.now(),
+                "is_active": parse_bool(row.get("is_active", True)),
+                "is_fallback": parse_bool(row.get("is_fallback", False), False),
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
                 "match_count": 0,
                 "positive_feedback": 0,
                 "negative_feedback": 0,
-                "user_weights": {}
             }
 
-            # Optional: Prevent duplicate intent names
-            existing = await db.intents.find_one({"intent": intent_data["intent"]})
+            existing = await db.intents.find_one({"intent": intent_name})
             if existing:
                 continue
 
             await db.intents.insert_one(intent_data)
-            inserted.append(intent_data["intent"])
+            inserted.append(intent_name)
 
         except Exception as e:
             errors.append({
@@ -356,4 +219,91 @@ async def upload_intents(
         "inserted_count": len(inserted),
         "inserted_intents": inserted,
         "errors": errors
+    }
+
+
+async def generate_reply(db, message: str, chat_id: str):
+
+    message_clean = message.lower().strip()
+
+    chat = await db.chats.find_one({"_id": ObjectId(chat_id)})
+    intents = await db.intents.find({"is_active": True}).to_list(None)
+
+    user_embedding = generate_embedding(message_clean)
+
+    best_intent = None
+    best_score = 0.0
+
+    # ─────────────────────────────
+    # 🔥 CONTEXT CONTINUATION LOGIC
+    # ─────────────────────────────
+    short_message = len(message_clean.split()) <= 3
+
+    for intent in intents:
+
+        # If short reply like "yes", focus on last intent
+        if short_message and chat.get("current_intent_id"):
+            if str(intent["_id"]) != chat["current_intent_id"]:
+                continue
+
+        score = score_intent(user_embedding, message_clean, intent)
+
+        if score > best_score:
+            best_score = score
+            best_intent = intent
+
+    confidence = round(best_score, 3)
+
+    # ─────────────────────────────
+    # DECISION ENGINE
+    # ─────────────────────────────
+    if best_intent and confidence >= 0.75:
+
+        await db.chats.update_one(
+            {"_id": ObjectId(chat_id)},
+            {
+                "$set": {
+                    "current_intent_id": str(best_intent["_id"]),
+                    "failure_count": 0,
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+
+        return {
+            "message": random.choice(best_intent["responses"]),
+            "intent_id": str(best_intent["_id"]),
+            "confidence": confidence,
+            "decision": "bot"
+        }
+
+    if best_intent and confidence >= 0.5:
+        return {
+            "message": f"I think you're asking about '{best_intent['intent']}'. Can you confirm?",
+            "intent_id": str(best_intent["_id"]),
+            "confidence": confidence,
+            "decision": "clarification"
+        }
+
+    # 🔥 Escalation after repeated failure
+    failure_count = chat.get("failure_count", 0) + 1
+
+    await db.chats.update_one(
+        {"_id": ObjectId(chat_id)},
+        {"$set": {"failure_count": failure_count}}
+    )
+
+    if failure_count >= 2:
+        return {
+            "message": "I'm transferring you to a human support agent.",
+            "intent_id": None,
+            "confidence": confidence,
+            "decision": "escalate"
+        }
+
+    return {
+        "message": "I'm not sure I understood. Could you please rephrase?",
+        "intent_id": None,
+        "confidence": confidence,
+        "decision": "clarification"
     }

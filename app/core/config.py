@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_ID: str
     RAZORPAY_KEY_SECRET: str
 
+    # CHAT ENGINE Settings
+    CONFIDENCE_HIGH: float
+    CONFIDENCE_LOW: float
+    SIMILARITY_WEIGHT: float
+    CONTEXT_BOOST: float
+    FUZZY_THRESHOLD: float
+    MAX_CONTEXT_MESSAGES: int
+
     class Config:
         env_file = ".env"
 
