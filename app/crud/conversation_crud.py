@@ -5,7 +5,7 @@ from datetime import datetime
 from bson import ObjectId
 from typing import Optional
 
-from app.models.conversation import Conversation
+from app.models.conversation import Conversation, ResponseConversation
 from app.services.engine_service import generate_embedding
 
 
@@ -55,22 +55,82 @@ async def create_conversation(
     return Conversation(**data)
 
 
-async def list_conversations(
-    db: AsyncIOMotorDatabase,
-    chat_id: str,
-):
+# async def list_conversations(
+#     db: AsyncIOMotorDatabase,
+#     chat_id: str,
+# ):
 
-    cursor = db.conversations.find(
-        {"chat_id": ObjectId(chat_id)}
-    ).sort("created_at", -1)
+#     cursor = db.conversations.find(
+#         {"chat_id": ObjectId(chat_id)}
+#     ).sort("created_at", 1)
 
+#     items = await cursor.to_list(length=1000)
+
+#     for m in items:
+#         m["_id"] = str(m["_id"])
+#         m["chat_id"] = str(m["chat_id"])
+
+#     return [Conversation(**m) for m in items]
+from bson import ObjectId
+
+async def list_conversations(db: AsyncIOMotorDatabase, chat_id: str):
+
+    pipeline = [
+        {
+            "$match": {
+                "chat_id": ObjectId(chat_id)
+            }
+        },
+
+        # convert sender_id string → ObjectId
+        {
+            "$addFields": {
+                "sender_object_id": { "$toObjectId": "$sender_id" }
+            }
+        },
+
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "sender_object_id",
+                "foreignField": "_id",
+                "as": "sender"
+            }
+        },
+
+        {
+            "$unwind": {
+                "path": "$sender",
+                "preserveNullAndEmptyArrays": True
+            }
+        },
+
+        # build sender_name
+        {
+            "$addFields": {
+                "sender_name": {
+                    "$concat": [
+                        { "$ifNull": ["$sender.first_name", ""] },
+                        " ",
+                        { "$ifNull": ["$sender.last_name", ""] }
+                    ]
+                }
+            }
+        },
+
+        {
+            "$sort": {"created_at": 1}
+        }
+    ]
+
+    cursor = db.conversations.aggregate(pipeline)
     items = await cursor.to_list(length=1000)
 
     for m in items:
         m["_id"] = str(m["_id"])
         m["chat_id"] = str(m["chat_id"])
 
-    return [Conversation(**m) for m in items]
+    return [ResponseConversation(**m) for m in items]
 
 
 async def save_conversation(

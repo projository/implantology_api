@@ -70,22 +70,79 @@ async def update_chat(
     return await get_chat(db, chat_id)
 
 
+# async def list_chats(
+#     db: AsyncIOMotorDatabase,
+#     user_id: Optional[str] = None,
+# ) -> List[Chat]:
+
+#     # Build filter dynamically
+#     query = {}
+
+#     if user_id:
+#         query["user_id"] = user_id  # Convert to ObjectId if required
+
+#     cursor = (
+#         db.chats
+#         .find(query)
+#         .sort("updated_at", -1)
+#     )
+
+#     chats = await cursor.to_list(length=100)
+
+#     for c in chats:
+#         c["_id"] = str(c["_id"])
+
+#     return [Chat(**c) for c in chats]
+from typing import List
+
 async def list_chats(
     db: AsyncIOMotorDatabase,
     user_id: Optional[str] = None,
 ) -> List[Chat]:
 
-    # Build filter dynamically
-    query = {}
+    pipeline = [
+        {
+            "$addFields": {
+                "user_obj_id": {"$toObjectId": "$user_id"}
+            }
+        },
+        {
+            "$lookup": {
+                "from": "users",
+                "localField": "user_obj_id",
+                "foreignField": "_id",
+                "as": "user"
+            }
+        },
+        {
+            "$unwind": {
+                "path": "$user",
+                "preserveNullAndEmptyArrays": True
+            }
+        },
+        {
+            "$addFields": {
+                "user_name": {
+                    "$concat": [
+                        {"$ifNull": ["$user.first_name", ""]},
+                        " ",
+                        {"$ifNull": ["$user.last_name", ""]}
+                    ]
+                }
+            }
+        },
+        {
+            "$project": {
+                "user": 0,
+                "user_obj_id": 0
+            }
+        },
+        {
+            "$sort": {"updated_at": -1}
+        }
+    ]
 
-    if user_id:
-        query["user_id"] = user_id  # Convert to ObjectId if required
-
-    cursor = (
-        db.chats
-        .find(query)
-        .sort("updated_at", -1)
-    )
+    cursor = db.chats.aggregate(pipeline)
 
     chats = await cursor.to_list(length=100)
 

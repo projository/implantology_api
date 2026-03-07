@@ -14,6 +14,7 @@ class Chat(BaseModel):
     id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id")
 
     user_id: str
+    user_name: str
 
     status: ChatStatus = "open"
     source: ChatSource = "bot"
