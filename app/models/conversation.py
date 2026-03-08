@@ -45,6 +45,7 @@ class ResponseConversation(BaseModel):
     sender_type: SenderType
     sender_id: Optional[str] = None
     sender_name: Optional[str] = None
+    sender_image_key: Optional[str] = None
 
     message_type: MessageType = "text"
     content: str

@@ -114,7 +114,8 @@ async def list_conversations(db: AsyncIOMotorDatabase, chat_id: str):
                         " ",
                         { "$ifNull": ["$sender.last_name", ""] }
                     ]
-                }
+                },
+                "sender_image_key": {"$ifNull": ["$sender.image_key", None]}
             }
         },
 

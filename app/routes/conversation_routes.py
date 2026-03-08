@@ -30,8 +30,13 @@ async def send_message(
     # 1️⃣ Create chat if needed
     chat_id = conversation_data.chat_id
 
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+
+    name = user.get("first_name") if user else None
+    image_key = user.get("image_key") if user else None
+
     if not chat_id:
-        chat = await create_chat(db, ChatCreate(user_id=user_id))
+        chat = await create_chat(db, ChatCreate(user_id=user_id,user_name=name,user_image_key=image_key))
         chat_id = str(chat.id)
 
     chat = await get_chat(db, chat_id)

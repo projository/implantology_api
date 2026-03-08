@@ -21,6 +21,8 @@ async def create_chat(
 
     data = {
         "user_id": chat_create.user_id,
+        "user_name": chat_create.user_name,
+        "user_image_key": chat_create.user_image_key,
         "status": "open",
         "source": "bot",
         "last_message_at": now,
@@ -93,14 +95,20 @@ async def update_chat(
 #         c["_id"] = str(c["_id"])
 
 #     return [Chat(**c) for c in chats]
-from typing import List
-
 async def list_chats(
     db: AsyncIOMotorDatabase,
     user_id: Optional[str] = None,
 ) -> List[Chat]:
 
-    pipeline = [
+    pipeline = []
+
+    # Dynamic filter (same logic as before)
+    if user_id:
+        pipeline.append({
+            "$match": {"user_id": user_id}
+        })
+
+    pipeline.extend([
         {
             "$addFields": {
                 "user_obj_id": {"$toObjectId": "$user_id"}
@@ -128,7 +136,8 @@ async def list_chats(
                         " ",
                         {"$ifNull": ["$user.last_name", ""]}
                     ]
-                }
+                },
+                "user_image_key": {"$ifNull": ["$user.image_key", None]}
             }
         },
         {
@@ -140,7 +149,7 @@ async def list_chats(
         {
             "$sort": {"updated_at": -1}
         }
-    ]
+    ])
 
     cursor = db.chats.aggregate(pipeline)
 
