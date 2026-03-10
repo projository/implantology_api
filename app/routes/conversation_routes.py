@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from fastapi.encoders import jsonable_encoder
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
@@ -51,10 +52,13 @@ async def send_message(
         sender_id=user_id,
     )
 
-    await manager.broadcast(chat_id, {
-        "type": "new_message",
-        "message": user_msg.dict()
-    })
+    await manager.broadcast(
+        chat_id,
+        jsonable_encoder({
+            "type": "new_message",
+            "message": user_msg.dict()
+        })
+    )
 
     # 3️⃣ If bot disabled → escalate directly
     if not chat.is_bot_enabled:
@@ -114,10 +118,13 @@ async def send_message(
             confidence_score=reply_data["confidence"],
         )
 
-        await manager.broadcast(chat_id, {
-            "type": "bot_reply",
-            "message": bot_msg.dict()
-        })
+        await manager.broadcast(
+            chat_id,
+            jsonable_encoder({
+                "type": "bot_reply",
+                "message": bot_msg.dict()
+            })
+        )
 
         return {
             "chat_id": chat_id,
@@ -170,10 +177,13 @@ async def replay_conversation(
         sender_id=admin_id,
     )
 
-    await manager.broadcast(conversation_data.chat_id, {
-        "type": "admin_reply",
-        "message": admin_msg.dict()
-    })
+    await manager.broadcast(
+        conversation_data.chat_id,
+        jsonable_encoder({
+            "type": "admin_reply",
+            "message": admin_msg
+        })
+    )
 
     await db.chats.update_one(
         {"_id": ObjectId(conversation_data.chat_id)},
