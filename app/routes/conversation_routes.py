@@ -12,6 +12,7 @@ from app.crud.conversation_crud import create_conversation, list_conversations, 
 from app.crud.chat_crud import create_chat, get_chat
 from app.models.chat import ChatCreate
 from app.utils.database import get_database
+from app.core.socket_manager import manager
 
 router = APIRouter()
 
@@ -49,6 +50,11 @@ async def send_message(
         content=conversation_data.message,
         sender_id=user_id,
     )
+
+    await manager.broadcast(chat_id, {
+        "type": "new_message",
+        "message": user_msg.dict()
+    })
 
     # 3️⃣ If bot disabled → escalate directly
     if not chat.is_bot_enabled:
@@ -108,6 +114,11 @@ async def send_message(
             confidence_score=reply_data["confidence"],
         )
 
+        await manager.broadcast(chat_id, {
+            "type": "bot_reply",
+            "message": bot_msg.dict()
+        })
+
         return {
             "chat_id": chat_id,
             "status": "bot",
@@ -158,6 +169,11 @@ async def replay_conversation(
         content=conversation_data.message,
         sender_id=admin_id,
     )
+
+    await manager.broadcast(conversation_data.chat_id, {
+        "type": "admin_reply",
+        "message": admin_msg.dict()
+    })
 
     await db.chats.update_one(
         {"_id": ObjectId(conversation_data.chat_id)},
