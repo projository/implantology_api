@@ -3,31 +3,43 @@
 from fastapi import WebSocket
 from typing import Dict, List
 
-
 class ConnectionManager:
 
     def __init__(self):
-        self.active_connections: Dict[str, List[WebSocket]] = {}
+        self.chat_connections: Dict[str, List[WebSocket]] = {}
+        self.admin_connections: List[WebSocket] = []
 
-    async def connect(self, chat_id: str, websocket: WebSocket):
+    async def connect_chat(self, chat_id: str, websocket: WebSocket):
         await websocket.accept()
 
-        if chat_id not in self.active_connections:
-            self.active_connections[chat_id] = []
+        if chat_id not in self.chat_connections:
+            self.chat_connections[chat_id] = []
 
-        self.active_connections[chat_id].append(websocket)
+        self.chat_connections[chat_id].append(websocket)
 
-    def disconnect(self, chat_id: str, websocket: WebSocket):
+    async def connect_admin(self, websocket: WebSocket):
+        await websocket.accept()
+        self.admin_connections.append(websocket)
 
-        if chat_id in self.active_connections:
-            self.active_connections[chat_id].remove(websocket)
+    def disconnect_chat(self, chat_id: str, websocket: WebSocket):
+        if chat_id in self.chat_connections:
+            self.chat_connections[chat_id].remove(websocket)
 
-    async def broadcast(self, chat_id: str, message: dict):
+    def disconnect_admin(self, websocket: WebSocket):
+        if websocket in self.admin_connections:
+            self.admin_connections.remove(websocket)
 
-        if chat_id not in self.active_connections:
+    async def broadcast_chat(self, chat_id: str, message: dict):
+
+        if chat_id not in self.chat_connections:
             return
 
-        for connection in self.active_connections[chat_id]:
+        for connection in self.chat_connections[chat_id]:
+            await connection.send_json(message)
+
+    async def broadcast_admin(self, message: dict):
+
+        for connection in self.admin_connections:
             await connection.send_json(message)
 
 
