@@ -40,7 +40,7 @@ from app.routes.faq_routes import router as faq_router
 from app.routes.intent_routes import router as intent_router
 from app.routes.chat_routes import router as chat_router
 from app.routes.conversation_routes import router as conversation_router
-
+from app.routes.socket_routes import router as socket_router
 
 # ---------------------------------------------------
 # Logging Configuration
@@ -161,3 +161,4 @@ app.include_router(faq_router, prefix="/faqs", tags=["FAQ"])
 app.include_router(intent_router, prefix="/intents", tags=["Intent"])
 app.include_router(chat_router, prefix="/chats", tags=["Chat"])
 app.include_router(conversation_router, prefix="/conversations", tags=["Conversation"])
+app.include_router(socket_router, tags=["Socket"])

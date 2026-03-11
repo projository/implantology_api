@@ -2,16 +2,18 @@
 
 from datetime import datetime
 
+from fastapi.encoders import jsonable_encoder
 from fastapi import APIRouter, Depends, HTTPException
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 
 from app.crud.intent_crud import generate_reply
 from app.models.conversation import ResponseConversation, ConversationCreate, ConversationUpdate
-from app.crud.conversation_crud import create_conversation, list_conversations, save_conversation
+from app.crud.conversation_crud import list_conversations, save_conversation
 from app.crud.chat_crud import create_chat, get_chat
 from app.models.chat import ChatCreate
 from app.utils.database import get_database
+from app.core.socket_manager import manager
 
 router = APIRouter()
 
@@ -48,6 +50,23 @@ async def send_message(
         sender_type="user",
         content=conversation_data.message,
         sender_id=user_id,
+    )
+
+    await manager.broadcast_chat(
+        chat_id,
+        jsonable_encoder({
+            "type": "new_message",
+            "message": user_msg.dict()
+        })
+    )
+    await manager.broadcast_admin(
+        jsonable_encoder({
+            "type": "chat_list_update",
+            "chat_id": chat_id,
+            "last_message": conversation_data.message,
+            "sender_type": "user",
+            "last_message_at": user_msg.created_at
+        })
     )
 
     # 3️⃣ If bot disabled → escalate directly
@@ -108,6 +127,23 @@ async def send_message(
             confidence_score=reply_data["confidence"],
         )
 
+        await manager.broadcast_chat(
+            chat_id,
+            jsonable_encoder({
+                "type": "bot_reply",
+                "message": bot_msg.dict()
+            })
+        )
+        await manager.broadcast_admin(
+            jsonable_encoder({
+                "type": "chat_list_update",
+                "chat_id": chat_id,
+                "last_message": reply_data["message"],
+                "sender_type": "bot",
+                "last_message_at": bot_msg.created_at
+            })
+        )
+
         return {
             "chat_id": chat_id,
             "status": "bot",
@@ -157,6 +193,23 @@ async def replay_conversation(
         sender_type="admin",
         content=conversation_data.message,
         sender_id=admin_id,
+    )
+
+    await manager.broadcast_chat(
+        conversation_data.chat_id,
+        jsonable_encoder({
+            "type": "admin_reply",
+            "message": admin_msg
+        })
+    )
+    await manager.broadcast_admin(
+        jsonable_encoder({
+            "type": "chat_list_update",
+            "chat_id": conversation_data.chat_id,
+            "last_message": conversation_data.message,
+            "sender_type": "admin",
+            "last_message_at": admin_msg.created_at
+        })
     )
 
     await db.chats.update_one(

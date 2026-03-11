@@ -55,24 +55,6 @@ async def create_conversation(
     return Conversation(**data)
 
 
-# async def list_conversations(
-#     db: AsyncIOMotorDatabase,
-#     chat_id: str,
-# ):
-
-#     cursor = db.conversations.find(
-#         {"chat_id": ObjectId(chat_id)}
-#     ).sort("created_at", 1)
-
-#     items = await cursor.to_list(length=1000)
-
-#     for m in items:
-#         m["_id"] = str(m["_id"])
-#         m["chat_id"] = str(m["chat_id"])
-
-#     return [Conversation(**m) for m in items]
-from bson import ObjectId
-
 async def list_conversations(db: AsyncIOMotorDatabase, chat_id: str):
 
     pipeline = [
