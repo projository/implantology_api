@@ -9,7 +9,7 @@ from bson import ObjectId
 
 from app.crud.intent_crud import generate_reply
 from app.models.conversation import ResponseConversation, ConversationCreate, ConversationUpdate
-from app.crud.conversation_crud import list_conversations, save_conversation
+from app.crud.conversation_crud import delete_all_conversations, list_conversations, save_conversation
 from app.crud.chat_crud import create_chat, get_chat
 from app.models.chat import ChatCreate
 from app.utils.database import get_database
@@ -20,6 +20,18 @@ router = APIRouter()
 
 async def get_db():
     return await get_database()
+
+
+@router.delete("/clear")
+async def remove_all_conversations(
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    deleted_count = await delete_all_conversations(db)
+
+    return {
+        "message": "All conversations deleted successfully",
+        "deleted_count": deleted_count
+    }
 
 
 @router.post("/send")

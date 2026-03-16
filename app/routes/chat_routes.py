@@ -8,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from app.models.chat import Chat, ChatCreate
 from app.crud.chat_crud import (
     create_chat,
+    delete_all_chats,
     get_chat,
     list_chats,
     ChatNotFound,
@@ -19,6 +20,18 @@ router = APIRouter()
 
 async def get_db():
     return await get_database()
+
+
+@router.delete("/clear")
+async def remove_all_chats(
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    deleted_count = await delete_all_chats(db)
+
+    return {
+        "message": "All chats deleted successfully",
+        "deleted_count": deleted_count
+    }
 
 
 @router.get("", response_model=list[Chat])

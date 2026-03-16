@@ -159,3 +159,10 @@ async def list_chats(
         c["_id"] = str(c["_id"])
 
     return [Chat(**c) for c in chats]
+
+
+
+async def delete_all_chats(db: AsyncIOMotorDatabase) -> int:
+
+    result = await db.chats.delete_many({})
+    return result.deleted_count

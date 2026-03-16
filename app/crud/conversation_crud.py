@@ -166,3 +166,9 @@ async def save_conversation(
     data["chat_id"] = str(data["chat_id"])
 
     return Conversation(**data)
+
+
+async def delete_all_conversations(db: AsyncIOMotorDatabase) -> int:
+
+    result = await db.conversations.delete_many({})
+    return result.deleted_count
