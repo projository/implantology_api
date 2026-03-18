@@ -14,9 +14,10 @@ class OptionNotFound(Exception):
 def serialize(option: dict) -> dict:
     option["_id"] = str(option["_id"])
 
-    if "options" in option:
+    if "options" in option and option["options"]:
         for opt in option["options"]:
-            opt["next_id"] = str(opt["next_id"])
+            if isinstance(opt.get("next_id"), ObjectId):
+                opt["next_id"] = str(opt["next_id"])
 
     option["is_support"] = option.get("type") == "support"
 
@@ -65,19 +66,19 @@ async def get_options(
     if type:
         query = {"type": type}
 
-    # Fetch paginated options
-    options_cursor = db.options.find(query).sort("created_at", -1).skip(skip).limit(per_page)
+    options_cursor = (
+        db.options.find(query)
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(per_page)
+    )
+
     options = await options_cursor.to_list(length=per_page)
 
-    # Convert ObjectId to str
-    for option in options:
-        option["_id"] = str(option["_id"])
-
-    # Fetch total number of options
     total = await db.options.count_documents(query)
 
     return {
-        "data": [Option(**option).dict() for option in options],  # Or just return raw option dicts if no model
+        "data": [Option(**serialize(option)).dict() for option in options],
         "pagination": {
             "current_page": page,
             "per_page": per_page,
@@ -85,6 +86,7 @@ async def get_options(
             "last_page": math.ceil(total / per_page) if per_page else 0
         }
     }
+
 
 async def get_option(db: AsyncIOMotorDatabase, option_id: str) -> Option:
     option = await db.options.find_one({"_id": ObjectId(option_id)})
